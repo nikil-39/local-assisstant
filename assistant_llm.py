@@ -26,7 +26,7 @@ import httpx
 # ═══════════════════════════════════════════════════════════════════════════
 
 LLM_CONFIG = {
-    "api_key": os.getenv("GENAIPLATFORM_FARM_SUBSCRIPTION_KEY", "4d45f87f24dd4526974b8780ce765467"),
+    "api_key": os.getenv("GENAIPLATFORM_FARM_SUBSCRIPTION_KEY"),  # Set env var or use .env file
     "base_url": "https://aoai-farm.bosch-temp.com/api/openai/deployments/askbosch-prod-farm-openai-gpt-4o-mini-2024-07-18",
     "model": "gpt-4o-mini",
     "proxy": "http://127.0.0.1:3128"

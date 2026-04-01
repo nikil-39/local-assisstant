@@ -57,8 +57,8 @@ The script uses **Windows Speech Recognition (SAPI)** which is built into Window
 Uses your company's LLM for intelligent command parsing:
 
 ```powershell
-# Set your LLM Farm key (or it uses your default)
-set GENAIPLATFORM_FARM_SUBSCRIPTION_KEY=4d45f87f24dd4526974b8780ce765467
+# Set your LLM Farm key
+set GENAIPLATFORM_FARM_SUBSCRIPTION_KEY=your-api-key-here
 
 python assistant_llm.py
 ```
