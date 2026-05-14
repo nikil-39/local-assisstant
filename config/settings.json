@@ -1,0 +1,50 @@
+{
+    "assistant": {
+        "name": "Jarvis",
+        "wake_word": "hey jarvis",
+        "language": "en-US",
+        "continuous_listening": false
+    },
+    "voice": {
+        "tts_engine": "pyttsx3",
+        "tts_rate": 175,
+        "tts_volume": 0.9,
+        "stt_engine": "vosk",
+        "listen_timeout": 10,
+        "phrase_time_limit": 15,
+        "energy_threshold": 150,
+        "pause_threshold": 2.0
+    },
+    "ai": {
+        "provider": "openai",
+        "openai_model": "gpt-4o-mini",
+        "openai_base_url": "https://api.openai.com/v1",
+        "max_tokens": 500,
+        "temperature": 0.7,
+        "system_prompt": "You are Jarvis, a helpful and witty AI desktop assistant. Keep responses concise and actionable. When the user asks you to perform system tasks, describe what you're doing briefly."
+    },
+    "ui": {
+        "window_width": 600,
+        "window_height": 650,
+        "orb_size": 280,
+        "theme": "dark",
+        "opacity": 0.95,
+        "always_on_top": true,
+        "start_minimized": false,
+        "primary_color": "#6366f1",
+        "secondary_color": "#8b5cf6",
+        "accent_color": "#06b6d4",
+        "background_color": "rgba(17, 24, 39, 0.95)"
+    },
+    "hotkeys": {
+        "toggle_listen": "Ctrl+Space",
+        "toggle_window": "Ctrl+Shift+J",
+        "quit": "Ctrl+Q"
+    },
+    "system": {
+        "log_level": "INFO",
+        "max_history": 100,
+        "startup_sound": true,
+        "screenshots_dir": "~/Desktop/screenshots"
+    }
+}

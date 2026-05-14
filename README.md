@@ -1,251 +1,211 @@
-# 🤖 Local Command Assistant
+# Jarvis — Voice Assistant
 
-An **always-on local assistant** that executes system commands using natural language. Inspired by Claude Code's PowerShellTool and BashTool patterns.
+A futuristic voice assistant with a PyQt6 glassmorphism GUI, offline speech recognition (Vosk), and system control capabilities.
 
-## 🚀 Quick Start
+## Quick Start
 
-### Option 1: Zero Dependencies (Recommended for Office Laptops!)
 ```powershell
 cd c:\Github\local-assistant
-python assistant_windows.py
+pip install -r requirements.txt
+python download_vosk_model.py   # one-time: downloads offline speech model
+python main.py
 ```
-✅ Uses **Windows built-in Speech Recognition (SAPI)**  
-✅ **NO external tools or pip installs required!**  
-✅ Works offline  
 
-### Option 2: Text Mode Only
-```powershell
-npm start
+Launch flags:
+
+| Flag | Description |
+|------|-------------|
+| `--debug` | Enable verbose debug logging |
+| `--minimized` | Start minimized to system tray |
+
+## Features
+
+- **Offline voice recognition** — Vosk STT (no internet needed)
+- **Glassmorphism GUI** — animated orb, particle effects, waveform visualizer
+- **80+ app aliases** — fuzzy matching + Start Menu shortcut fallback
+- **AI integration** — OpenAI / Claude / Gemini (optional, via `.env`)
+- **Speech normalization** — handles messy voice input ("could you opened outlook" → opens Outlook)
+- **System control** — volume, screenshots, file ops, process management
+
+---
+
+## Voice Commands
+
+### Applications
+
+| Say | Action |
+|-----|--------|
+| "Open Chrome" | Launch Google Chrome |
+| "Launch Outlook" | Launch Outlook |
+| "Start VS Code" | Launch Visual Studio Code |
+| "Run Firefox" | Launch Mozilla Firefox |
+| "Close Notepad" | Kill Notepad process |
+
+You can say just the app name (e.g. "Outlook") and it will be opened automatically.
+
+**Supported app names:** outlook, word, excel, powerpoint, teams, onenote, chrome, firefox, edge, notepad, calculator, terminal, powershell, cmd, task manager, vs code, visual studio, paint, snipping tool, spotify, zoom, slack, discord, telegram, whatsapp, vpn, sap, keepass, acrobat, file explorer, settings, control panel, and more.
+
+### Web Search
+
+| Say | Action |
+|-----|--------|
+| "Search for Python tutorials" | Google search |
+| "Google machine learning" | Google search |
+| "Search Python on YouTube" | YouTube search |
+| "Search for React on GitHub" | GitHub search |
+| "Look up neural networks" | Google search |
+
+**Supported engines:** Google, YouTube, GitHub, Bing, StackOverflow, Wikipedia, Amazon, Reddit.
+
+### Websites
+
+| Say | Action |
+|-----|--------|
+| "Open google.com" | Opens in default browser |
+| "Go to github.com" | Opens in default browser |
+| "Visit stackoverflow.com" | Opens in default browser |
+
+### Volume Control
+
+| Say | Action |
+|-----|--------|
+| "Set volume to 50" | Set volume to 50% |
+| "Volume up" | Increase volume |
+| "Volume down" | Decrease volume |
+| "Mute" | Mute audio |
+| "Unmute" | Unmute audio |
+
+### System Information
+
+| Say | Action |
+|-----|--------|
+| "System info" | CPU, RAM, disk, OS overview |
+| "Battery status" | Battery percentage & charging state |
+| "CPU usage" | Current CPU load |
+| "Memory info" | RAM usage |
+| "Disk info" | Disk space |
+| "IP address" | Network IP address |
+
+### File Operations
+
+| Say | Action |
+|-----|--------|
+| "Create a file named notes.txt" | Creates file |
+| "Create a folder called projects" | Creates directory |
+| "Delete file test.txt" | Deletes file |
+| "List files in Desktop" | Lists directory contents |
+| "Search for files named report" | Searches for files |
+| "Open file readme.txt" | Opens file in default app |
+
+### Screenshots
+
+| Say | Action |
+|-----|--------|
+| "Take a screenshot" | Captures screen |
+| "Capture screenshot" | Captures screen |
+| "Grab a screenshot" | Captures screen |
+
+### Date & Time
+
+| Say | Action |
+|-----|--------|
+| "What time is it" | Current time |
+| "What's the date" | Current date |
+| "What day is it" | Day of the week |
+
+### Process Management
+
+| Say | Action |
+|-----|--------|
+| "List running processes" | Show active processes |
+| "Show tasks" | Show active processes |
+
+### Media
+
+| Say | Action |
+|-----|--------|
+| "Play music" | Play media |
+| "Pause music" | Pause media |
+
+### System
+
+| Say | Action |
+|-----|--------|
+| "Lock screen" | Lock the computer |
+| "Lock PC" | Lock the computer |
+
+### Misc
+
+| Say | Action |
+|-----|--------|
+| "Tell me a joke" | Random joke |
+| "What's your name" | Assistant introduction |
+| "Help" / "What can you do" | List capabilities |
+| "Clear history" | Clear chat history |
+| "Exit" / "Goodbye" | Shut down assistant |
+
+### AI Chat
+
+Anything that doesn't match a command is sent to the AI provider for a conversational response (requires API key in `.env`).
+
+---
+
+## Configuration
+
+### `config/settings.json`
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `voice.stt_engine` | `"vosk"` | Speech engine: vosk, sphinx, powershell_sapi |
+| `voice.tts_rate` | `175` | Text-to-speech speed |
+| `voice.tts_volume` | `0.9` | TTS volume (0.0–1.0) |
+| `voice.listen_timeout` | `10` | Max seconds to wait for speech |
+| `voice.pause_threshold` | `2.0` | Silence duration to end phrase |
+| `voice.energy_threshold` | `150` | Microphone sensitivity |
+| `ai.provider` | `"openai"` | AI provider: openai, claude, gemini |
+
+### `config/commands.json`
+
+- `app_aliases` — Map friendly names to executables (add your own apps here)
+- `search_engines` — URL templates for web searches
+- `quick_responses` — Canned replies for greetings
+
+### `.env` (optional, for AI features)
+
+```
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_AI_API_KEY=AI...
 ```
 
 ---
 
-## 🎤 Voice Setup (Zero Dependencies Version)
-
-**No setup required!** Just run:
-```powershell
-python assistant_windows.py
-```
-
-The script uses **Windows Speech Recognition (SAPI)** which is built into Windows.
-
-### How to Use Voice:
-1. Press **ENTER** (empty input)
-2. Speak your command clearly (e.g., "Open Outlook")
-3. Wait for auto-detection when you stop speaking
-4. Command executes!
-
-### Supported Voice Commands:
-```
-"Open Outlook"          → Opens Outlook
-"Open Chrome"           → Opens Chrome  
-"Open VS Code"          → Opens VS Code
-"Open Teams"            → Opens Microsoft Teams
-"Open Jira"             → Opens Bosch Jira
-"Search weather today"  → Google search
-"YouTube funny cats"    → YouTube search
-"Go to github.com"      → Opens website
-"What time is it"       → Shows time
-"Lock screen"           → Locks PC
-"Exit"                  → Closes assistant
-```
-
----
-
-## 🧠 Option 3: Voice + Bosch LLM Farm (Smart Commands!)
-
-Uses your company's LLM for intelligent command parsing:
-
-```powershell
-# Set your LLM Farm key
-set GENAIPLATFORM_FARM_SUBSCRIPTION_KEY=your-api-key-here
-
-python assistant_llm.py
-```
-
-With LLM, you can say things more naturally:
-- "Can you open my email please?" → Opens Outlook
-- "I need to check something on Jira" → Opens Jira
-- "Find me some Python tutorials" → Searches Google
-
----
-
-## 💬 Available Commands
-
-### 🚀 Open Apps
-| Command | Action |
-|---------|--------|
-| `open outlook` | Open Microsoft Outlook |
-| `open chrome` | Open Google Chrome |
-| `open vscode` | Open Visual Studio Code |
-| `open calculator` | Open Calculator |
-| `open [any app]` | Try to open any app by name |
-
-### Supported Apps
-```
-Microsoft Office: outlook, word, excel, powerpoint, teams, onenote
-Browsers: chrome, firefox, edge, brave
-System: notepad, calculator, terminal, explorer, settings, task manager
-Dev Tools: vscode, git bash
-Media: spotify, vlc
-Communication: discord, slack, zoom, whatsapp, telegram
-Others: steam, obs
-```
-
-### 🔍 Search
-| Command | Action |
-|---------|--------|
-| `search [query]` | Google search |
-| `youtube [query]` | YouTube search |
-| `github [query]` | GitHub search |
-| `bing [query]` | Bing search |
-
-### 🌐 Web
-| Command | Action |
-|---------|--------|
-| `go to github.com` | Open a website |
-| `visit google.com` | Open a website |
-
-### 💻 System
-| Command | Action |
-|---------|--------|
-| `system info` | Show PC info (OS, CPU, RAM) |
-| `show processes` | List top running processes |
-| `kill chrome` | Kill a process |
-| `time` / `date` | Show current time |
-| `lock` | Lock screen |
-| `screenshot` | Take a screenshot (saves to Desktop) |
-| `sleep` | Put computer to sleep |
-| `shutdown` | Shutdown (10s delay) |
-| `restart` | Restart (10s delay) |
-
-### ⚡ Direct Commands
-| Command | Action |
-|---------|--------|
-| `ps: [command]` | Run any PowerShell command |
-| `cmd: [command]` | Run any PowerShell command |
-
-### 🚪 Exit
-| Command | Action |
-|---------|--------|
-| `exit` / `quit` / `bye` | Close assistant |
-
----
-
-## 🔄 Making It "Always On"
-
-### Option 1: Run in Background Terminal
-```powershell
-Start-Process powershell -ArgumentList "-NoExit -Command cd c:\Github\local-assistant; node assistant.js"
-```
-
-### Option 2: Create a Startup Shortcut
-
-1. Create `assistant.bat` in the project folder:
-```batch
-@echo off
-cd c:\Github\local-assistant
-node assistant.js
-```
-
-2. Create a shortcut to `assistant.bat`
-
-3. Press `Win + R`, type `shell:startup`, press Enter
-
-4. Move the shortcut to that folder
-
-Now the assistant will start automatically when Windows boots!
-
-### Option 3: Run as Windows Service (Advanced)
-
-Using [node-windows](https://www.npmjs.com/package/node-windows):
-
-```powershell
-npm install -g node-windows
-
-# Create service installer
-node -e "
-const Service = require('node-windows').Service;
-const svc = new Service({
-  name: 'Local Assistant',
-  description: 'Always-on local command assistant',
-  script: 'c:\\Github\\local-assistant\\assistant.js'
-});
-svc.on('install', () => svc.start());
-svc.install();
-"
-```
-
----
-
-## 🔮 Future Enhancements
-
-| Feature | How to Implement |
-|---------|------------------|
-| **🎤 Voice Input** | Add `node-record-lpcm16` + Whisper API for speech-to-text |
-| **🤖 AI Responses** | Connect to local [Ollama](https://ollama.ai/) LLM for intelligent responses |
-| **⌨️ Global Hotkey** | Use `node-global-key-listener` to trigger assistant from anywhere |
-| **🖥️ System Tray** | Use [Electron](https://www.electronjs.org/) for GUI with tray icon |
-| **📋 Clipboard** | Add clipboard read/write commands |
-| **📅 Reminders** | Add scheduled task reminders using node-cron |
-| **🔊 Text-to-Speech** | Add `say.js` for voice responses |
-
-### Example: Adding Ollama AI
-
-```javascript
-// Future: Connect to local Ollama
-import Ollama from 'ollama';
-
-async function askAI(prompt) {
-  const response = await ollama.chat({
-    model: 'llama2',
-    messages: [{ role: 'user', content: prompt }],
-  });
-  return response.message.content;
-}
-```
-
-### Example: Adding Voice Input
-
-```javascript
-// Future: Add voice recognition
-import record from 'node-record-lpcm16';
-import { Whisper } from 'whisper-node';
-
-const whisper = new Whisper('base.en');
-// Record → Transcribe → Execute
-```
-
----
-
-## 🏗️ Architecture
-
-Inspired by Claude Code's tool patterns:
+## Project Structure
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                 Local Assistant                      │
-├─────────────────────────────────────────────────────┤
-│  CommandParser    →  Parse natural language         │
-│  PowerShellTool   →  Execute system commands        │
-│  UI               →  Beautiful terminal output      │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼
-              ┌─────────────────────┐
-              │   Windows System    │
-              │   (PowerShell)      │
-              └─────────────────────┘
+local-assistant/
+├── main.py                  # Entry point
+├── assistant/
+│   ├── voice_handler.py     # STT/TTS (Vosk, Sphinx, SAPI)
+│   ├── command_processor.py # NLP pattern matching + normalization
+│   ├── system_controller.py # App launch, files, volume, etc.
+│   └── ai_integration.py   # OpenAI/Claude/Gemini integration
+├── ui/
+│   ├── main_window.py      # PyQt6 glassmorphism window
+│   ├── animations.py       # Orb, particles, waveform widgets
+│   └── styles.qss          # Qt stylesheet
+├── config/
+│   ├── settings.json        # Runtime settings
+│   └── commands.json        # App aliases & search engines
+├── assets/
+│   └── vosk-model/          # Offline speech model (downloaded)
+├── download_vosk_model.py   # One-time model downloader
+└── requirements.txt         # Python dependencies
 ```
 
----
+## Requirements
 
-## 📝 License
-
-MIT - Feel free to modify and use!
-
----
-
-## 🙏 Credits
-
-Patterns inspired by [Claude Code](https://github.com/yasasbanukaofficial/claude-code) source.
+- Python 3.11+
+- Windows 10/11
+- Microphone (USB headset recommended)
+- ~40 MB disk for Vosk model
