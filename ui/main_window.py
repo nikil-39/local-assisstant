@@ -610,6 +610,7 @@ class JarvisMainWindow(QMainWindow):
         # AI manager signals
         self.ai_manager.response_ready.connect(self._on_ai_response)
         self.ai_manager.error_occurred.connect(self._on_error)
+        self.ai_manager.speech_corrected.connect(self._on_speech_corrected)
 
     # ── Hotkeys ───────────────────────────────────────────────────────
 
@@ -684,11 +685,25 @@ class JarvisMainWindow(QMainWindow):
 
     def _on_text_recognized(self, text: str):
         self._set_state(AssistantState.PROCESSING)
-        self._set_status(f"Heard: \"{text}\"")
-        self._add_chat_message(text, is_user=True)
+        self._raw_speech_text = text  # store for comparison
+        # Show raw transcription immediately so the user sees what was heard
+        self._set_status(f'Heard: "{text}" — correcting...')
+        # Trigger AI correction; _on_speech_corrected will process the result
+        self.ai_manager.rephrase_speech(text)
 
-        # Process the command
-        result = self.command_processor.process(text)
+    def _on_speech_corrected(self, original: str, corrected: str):
+        """Called after AI corrects STT output. Process the corrected command."""
+        corrected = corrected.strip()
+        if corrected and corrected.lower() != original.lower():
+            display = f"{corrected}  \u2022  *(fixed from: \"{original}\")*"
+            logger.info(f"STT correction: '{original}' → '{corrected}'")
+        else:
+            display = corrected or original
+        self._add_chat_message(display, is_user=True)
+        self._set_status(f'Processing: "{corrected or original}"')
+
+        # Process the corrected (or original if unchanged) command
+        result = self.command_processor.process(corrected or original)
         self._handle_command_result(result)
 
     def _on_speech_started(self):

@@ -16,7 +16,12 @@
         "pause_threshold": 2.0
     },
     "ai": {
-        "provider": "openai",
+        "provider": "ollama",
+        "ollama_enabled": true,
+        "ollama_model": "qwen2.5:32b",
+        "ollama_correction_model": "llama3.1:8b",
+        "ollama_base_url": "http://localhost:11434",
+        "gemini_api_key": "AIzaSyB2ureMs_49Gsf7sqUiajI-9-XBt49daco",
         "openai_model": "gpt-4o-mini",
         "openai_base_url": "https://api.openai.com/v1",
         "max_tokens": 500,

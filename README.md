@@ -1,6 +1,6 @@
 # Jarvis — Voice Assistant
 
-A futuristic voice assistant with a PyQt6 glassmorphism GUI, offline speech recognition (Vosk), and system control capabilities.
+A futuristic voice assistant with a PyQt6 glassmorphism GUI, offline speech recognition (Vosk), AI-powered speech correction, and system control capabilities.
 
 ## Quick Start
 
@@ -15,15 +15,40 @@ Launch flags:
 
 | Flag | Description |
 |------|-------------|
-| `--debug` | Enable verbose debug logging |
+| `--debug` | Enable verbose debug logging (shows STT correction in action) |
 | `--minimized` | Start minimized to system tray |
+
+## How It Works — Speech Pipeline
+
+```
+Microphone → Vosk STT → AI Correction → Command Processor → Action
+```
+
+Vosk converts speech to text offline, but sometimes mishears words (e.g. "what does the pain" instead of "what is the time"). The **AI correction step** uses a local LLM (via Ollama) to interpret the intent and fix the transcription before it reaches the command processor.
+
+**Example:**
+```
+Vosk heard:   "what does the pain"
+AI corrected: "what is the time"
+Action:       → DateTime command executed ✓
+```
+
+With `--debug` you can see this in the logs:
+```
+[jarvis.voice] INFO: Vosk recognized: "what does the pain"
+[jarvis.ai]    INFO: STT correction requested via OllamaProvider: 'what does the pain'
+[jarvis.ai]    INFO: STT correction result: 'what does the pain' → 'what is the time'
+```
+
+---
 
 ## Features
 
 - **Offline voice recognition** — Vosk STT (no internet needed)
+- **AI speech correction** — local LLM fixes STT errors before action dispatch
 - **Glassmorphism GUI** — animated orb, particle effects, waveform visualizer
 - **80+ app aliases** — fuzzy matching + Start Menu shortcut fallback
-- **AI integration** — OpenAI / Claude / Gemini (optional, via `.env`)
+- **AI integration** — Ollama (local) / Gemini / OpenAI / Claude (optional)
 - **Speech normalization** — handles messy voice input ("could you opened outlook" → opens Outlook)
 - **System control** — volume, screenshots, file ops, process management
 
@@ -162,7 +187,23 @@ Anything that doesn't match a command is sent to the AI provider for a conversat
 | `voice.listen_timeout` | `10` | Max seconds to wait for speech |
 | `voice.pause_threshold` | `2.0` | Silence duration to end phrase |
 | `voice.energy_threshold` | `150` | Microphone sensitivity |
-| `ai.provider` | `"openai"` | AI provider: openai, claude, gemini |
+| `ai.provider` | `"ollama"` | AI provider priority: ollama → gemini → openai |
+| `ai.ollama_model` | `"qwen2.5:32b"` | Ollama model for general AI responses |
+| `ai.ollama_correction_model` | `"llama3.1:8b"` | Ollama model used for fast STT correction |
+| `ai.ollama_base_url` | `"http://localhost:11434"` | Ollama server URL |
+| `ai.gemini_api_key` | `""` | Google Gemini API key (cloud fallback) |
+
+### Ollama (recommended — fully local, no API key)
+
+Install [Ollama](https://ollama.com) and pull the models:
+
+```powershell
+ollama pull llama3.1:8b     # fast STT correction
+ollama pull qwen2.5:32b     # general AI responses (or any model you prefer)
+ollama serve                 # keep running in background
+```
+
+Jarvis will auto-detect Ollama at startup. No `.env` or API keys needed.
 
 ### `config/commands.json`
 
@@ -170,13 +211,15 @@ Anything that doesn't match a command is sent to the AI provider for a conversat
 - `search_engines` — URL templates for web searches
 - `quick_responses` — Canned replies for greetings
 
-### `.env` (optional, for AI features)
+### `.env` (optional, for cloud AI fallback)
 
 ```
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_AI_API_KEY=AI...
+GEMINI_API_KEY=AI...
 ```
+
+Cloud providers are only used if Ollama is not running or a model isn't available.
 
 ---
 
@@ -189,7 +232,7 @@ local-assistant/
 │   ├── voice_handler.py     # STT/TTS (Vosk, Sphinx, SAPI)
 │   ├── command_processor.py # NLP pattern matching + normalization
 │   ├── system_controller.py # App launch, files, volume, etc.
-│   └── ai_integration.py   # OpenAI/Claude/Gemini integration
+│   └── ai_integration.py   # Ollama/OpenAI/Claude/Gemini + STT correction
 ├── ui/
 │   ├── main_window.py      # PyQt6 glassmorphism window
 │   ├── animations.py       # Orb, particles, waveform widgets
@@ -209,3 +252,4 @@ local-assistant/
 - Windows 10/11
 - Microphone (USB headset recommended)
 - ~40 MB disk for Vosk model
+- [Ollama](https://ollama.com) (optional but recommended for AI correction + responses)

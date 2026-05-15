@@ -150,7 +150,7 @@ class GeminiProvider(AIProvider):
     def _init_client(self):
         try:
             import httpx
-            self._client = httpx.Client(timeout=30.0)
+            self._client = httpx.Client(timeout=30.0, trust_env=False)
             self._available = bool(self.api_key)
         except Exception as e:
             logger.warning(f"Failed to init Gemini provider: {e}")
@@ -186,6 +186,59 @@ class GeminiProvider(AIProvider):
             return data["candidates"][0]["content"]["parts"][0]["text"].strip()
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
+            return None
+
+    def is_available(self) -> bool:
+        return self._available
+
+
+class OllamaProvider(AIProvider):
+    """Local Ollama provider (offline, no API key required)."""
+
+    def __init__(self, model: str = "llama3.1:8b", base_url: str = "http://localhost:11434"):
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self._available = False
+        self._client = None
+        self._init_client()
+
+    def _init_client(self):
+        try:
+            import httpx
+            # Bypass any system proxy for localhost — proxy env vars like HTTP_PROXY
+            # often have invalid ports (e.g. ':*') that cause httpx to crash.
+            self._client = httpx.Client(
+                timeout=120.0,
+                proxy=None,
+                trust_env=False,  # ignore HTTP_PROXY / HTTPS_PROXY env vars
+            )
+            resp = self._client.get(f"{self.base_url}/api/tags", timeout=5.0)
+            if resp.status_code == 200:
+                available_models = [m["name"] for m in resp.json().get("models", [])]
+                base_name = self.model.split(":")[0]
+                if any(self.model == m or m.startswith(base_name) for m in available_models):
+                    self._available = True
+                    logger.info(f"Ollama provider ready: {self.model}")
+                else:
+                    logger.warning(f"Ollama model '{self.model}' not found. Available: {available_models}")
+        except Exception as e:
+            logger.warning(f"Ollama not reachable: {e}")
+
+    def chat(self, messages: list[dict], max_tokens: int = 500) -> str | None:
+        if not self._available or not self._client:
+            return None
+        try:
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "stream": False,
+                "options": {"num_predict": max_tokens, "temperature": 0.3},
+            }
+            resp = self._client.post(f"{self.base_url}/api/chat", json=payload, timeout=120.0)
+            resp.raise_for_status()
+            return resp.json()["message"]["content"].strip()
+        except Exception as e:
+            logger.error(f"Ollama API error: {e}")
             return None
 
     def is_available(self) -> bool:
@@ -253,6 +306,8 @@ class AIManager(QObject):
 
     response_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
+    # Emitted after speech correction: (original_raw_text, corrected_text)
+    speech_corrected = pyqtSignal(str, str)
 
     def __init__(self, settings: dict):
         super().__init__()
@@ -261,14 +316,35 @@ class AIManager(QObject):
         self.conversation_history: list[dict] = []
         self.system_prompt = settings.get("system_prompt", "You are Jarvis, a helpful AI desktop assistant.")
         self._worker = None
+        self._rephrase_worker = None
+        # Dedicated fast local model for STT correction (avoids blocking large model)
+        self._correction_provider: AIProvider | None = None
         self._init_providers()
 
     def _init_providers(self):
-        """Initialize providers in priority order based on available API keys."""
-        provider_name = self.settings.get("provider", "openai")
+        """Initialize providers in priority order. Ollama first (local), then cloud, then fallback."""
 
-        # OpenAI
-        openai_key = os.getenv("OPENAI_API_KEY", "")
+        # ── Ollama (local, no API key needed) ───────────────────────────
+        if self.settings.get("ollama_enabled", True):
+            ollama_model = self.settings.get("ollama_model", "qwen2.5:32b")
+            ollama_url = self.settings.get("ollama_base_url", "http://localhost:11434")
+            ollama = OllamaProvider(model=ollama_model, base_url=ollama_url)
+            if ollama.is_available():
+                self.providers.append(ollama)
+                logger.info(f"Ollama provider initialized: {ollama_model}")
+
+            # Separate fast model for STT correction
+            correction_model = self.settings.get("ollama_correction_model", "llama3.1:8b")
+            if correction_model != ollama_model:
+                correction_ollama = OllamaProvider(model=correction_model, base_url=ollama_url)
+                if correction_ollama.is_available():
+                    self._correction_provider = correction_ollama
+                    logger.info(f"STT correction provider: {correction_model}")
+            if self._correction_provider is None and ollama.is_available():
+                self._correction_provider = ollama
+
+        # ── OpenAI ──────────────────────────────────────────────────────
+        openai_key = os.getenv("OPENAI_API_KEY", "") or self.settings.get("openai_api_key", "")
         if openai_key:
             self.providers.append(OpenAIProvider(
                 api_key=openai_key,
@@ -277,21 +353,23 @@ class AIManager(QObject):
             ))
             logger.info("OpenAI provider initialized")
 
-        # Anthropic
-        anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+        # ── Anthropic ───────────────────────────────────────────────────
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY", "") or self.settings.get("anthropic_api_key", "")
         if anthropic_key:
             self.providers.append(AnthropicProvider(api_key=anthropic_key))
             logger.info("Anthropic provider initialized")
 
-        # Gemini
-        gemini_key = os.getenv("GEMINI_API_KEY", "")
+        # ── Google Gemini ───────────────────────────────────────────────
+        gemini_key = os.getenv("GEMINI_API_KEY", "") or self.settings.get("gemini_api_key", "")
         if gemini_key:
             self.providers.append(GeminiProvider(api_key=gemini_key))
             logger.info("Gemini provider initialized")
+            if self._correction_provider is None:
+                self._correction_provider = self.providers[-1]
 
-        # Always add local fallback last
+        # ── Always add local fallback last ───────────────────────────────
         self.providers.append(LocalFallback())
-        logger.info(f"AI manager ready with {len(self.providers)} providers (preferred: {provider_name})")
+        logger.info(f"AI manager ready with {len(self.providers)} providers")
 
     def get_active_provider(self) -> AIProvider:
         """Get the first available provider."""
@@ -299,6 +377,64 @@ class AIManager(QObject):
             if p.is_available():
                 return p
         return self.providers[-1]  # fallback
+
+    def rephrase_speech(self, raw_text: str):
+        """Async STT correction: fixes speech recognition errors then emits speech_corrected(original, corrected).
+
+        Uses a fast local model (llama3.1:8b) or Gemini if Ollama is unavailable.
+        If no AI provider is available beyond LocalFallback, emits immediately with raw_text unchanged.
+        """
+        correction_provider = self._correction_provider or self.get_active_provider()
+
+        # LocalFallback can't do corrections - pass through unchanged
+        if isinstance(correction_provider, LocalFallback):
+            logger.info(f"No real AI provider for STT correction, passing through: '{raw_text}'")
+            self.speech_corrected.emit(raw_text, raw_text)
+            return
+
+        logger.info(f"STT correction requested via {type(correction_provider).__name__}: '{raw_text}'")
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a speech-to-text error corrector for a desktop voice assistant named Jarvis. "
+                    "The user spoke a voice command but the STT engine garbled it. "
+                    "Your job: figure out what the user MOST LIKELY meant and return ONLY that corrected command.\n\n"
+                    "Jarvis handles commands like:\n"
+                    "  - time/date: 'what time is it', 'what is the date'\n"
+                    "  - apps: 'open Chrome', 'launch Notepad', 'close Spotify'\n"
+                    "  - web: 'search for Python tutorials', 'open youtube.com'\n"
+                    "  - system: 'take a screenshot', 'system info', 'volume up', 'set volume to 50'\n"
+                    "  - weather: 'what is the weather'\n"
+                    "  - files: 'create a file named test.txt', 'list files in Downloads'\n"
+                    "  - greetings: 'hello', 'how are you', 'tell me a joke'\n\n"
+                    "Rules:\n"
+                    "1. Output ONLY the corrected command — no explanation, no quotes, no prefix.\n"
+                    "2. If it closely sounds like a known command type, map it (e.g. 'what does the pain' → 'what is the time').\n"
+                    "3. If you genuinely cannot determine intent, return the input unchanged."
+                ),
+            },
+            {"role": "user", "content": raw_text},
+        ]
+
+        self._rephrase_worker = AIWorker(correction_provider, messages, max_tokens=40)
+        self._rephrase_worker.response_ready.connect(
+            lambda corrected: self._on_correction_done(raw_text, corrected)
+        )
+        self._rephrase_worker.error_occurred.connect(
+            lambda err: self._on_correction_failed(raw_text, err)
+        )
+        self._rephrase_worker.start()
+
+    def _on_correction_done(self, original: str, corrected: str):
+        corrected = corrected.strip().strip('"').strip("'")
+        logger.info(f"STT correction result: '{original}' → '{corrected}'")
+        self.speech_corrected.emit(original, corrected)
+
+    def _on_correction_failed(self, original: str, error: str):
+        logger.warning(f"STT correction failed ({error}), using raw: '{original}'")
+        self.speech_corrected.emit(original, original)
 
     def ask(self, user_message: str):
         """Send a message to the AI asynchronously."""
