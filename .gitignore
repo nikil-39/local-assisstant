@@ -8,6 +8,12 @@ env/
 venv/
 .env
 
+# Token caches (secrets)
+config/.ms_tokens.json
+
+# Agent output
+output/
+
 # Node
 node_modules/
 package-lock.json

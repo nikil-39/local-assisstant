@@ -31,6 +31,8 @@ from assistant.voice_handler import VoiceHandler
 from assistant.command_processor import CommandProcessor, CommandResult
 from assistant.ai_integration import AIManager
 from assistant.system_controller import SystemController
+from assistant.agents import AgentRegistry
+from assistant.agents.base_agent import AgentWorker
 
 logger = logging.getLogger("jarvis.ui")
 
@@ -281,6 +283,8 @@ class JarvisMainWindow(QMainWindow):
         self.command_processor = CommandProcessor(commands_config)
         self.ai_manager = AIManager(self.ai_settings)
         self.system_controller = SystemController(commands_config)
+        self.agent_registry = AgentRegistry(settings, ai_manager=self.ai_manager)
+        self._agent_worker = None  # keep reference alive
 
         # Wire up signals
         self._connect_signals()
@@ -730,6 +734,22 @@ class JarvisMainWindow(QMainWindow):
         self.response_label.setText(text[:150] + ("..." if len(text) > 150 else ""))
         self.voice_handler.speak(text)
 
+    def _on_agent_finished(self, agent_name: str, summary: str):
+        """Called when a background agent finishes successfully."""
+        self._add_chat_message(summary, is_user=False)
+        self.response_label.setText(summary[:150] + ("..." if len(summary) > 150 else ""))
+        self._set_state(AssistantState.SPEAKING)
+        self._set_status(f"{agent_name} complete")
+        self.voice_handler.speak(summary)
+
+    def _on_agent_error(self, agent_name: str, error: str):
+        """Called when a background agent fails."""
+        msg = f"{agent_name} failed: {error}"
+        self._add_chat_message(msg, is_user=False)
+        self._set_state(AssistantState.ERROR)
+        self._set_status(msg)
+        QTimer.singleShot(3000, lambda: self._set_state(AssistantState.IDLE))
+
     def _handle_command_result(self, result: CommandResult):
         """Route a command result to the appropriate handler."""
         if result.data.get("needs_ai"):
@@ -748,6 +768,18 @@ class JarvisMainWindow(QMainWindow):
             self._clear_chat()
             self._set_state(AssistantState.IDLE)
             self._set_status("History cleared")
+            return
+
+        # Check if an agent handles this action
+        agent = self.agent_registry.match(result.action)
+        if agent:
+            self._add_chat_message(result.response, is_user=False)
+            self.voice_handler.speak(result.response)
+            self._set_status(f"Running {agent.name}...")
+            self._agent_worker = AgentWorker(agent, result.data)
+            self._agent_worker.finished.connect(self._on_agent_finished)
+            self._agent_worker.error.connect(self._on_agent_error)
+            self._agent_worker.start()
             return
 
         # Try system execution

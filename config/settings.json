@@ -51,5 +51,15 @@
         "max_history": 100,
         "startup_sound": true,
         "screenshots_dir": "~/Desktop/screenshots"
+    },
+    "agents": {
+        "briefing": {
+            "ms_client_id": "",
+            "ms_tenant_id": "",
+            "ms_client_secret": "",
+            "jira_base_url": "https://rb-tracker.bosch.com/tracker07",
+            "jira_user": "LFI1COB",
+            "jira_jql": "project=\"Team Accelerate\" AND assignee={user} AND status != Done ORDER BY updated DESC"
+        }
     }
 }

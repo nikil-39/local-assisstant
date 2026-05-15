@@ -35,6 +35,10 @@ class CommandProcessor(QObject):
 
     # Command patterns (order matters - more specific first)
     PATTERNS = [
+        # Agents (before general commands so they get priority)
+        (r"\b(morning\s+)?briefing\b", "briefing"),
+        (r"\bgive\s+(me\s+)?(a\s+)?briefing\b", "briefing"),
+        (r"\bnewspaper\b", "briefing"),
         # Exit / Quit
         (r"\b(exit|quit|bye|goodbye|shut\s*down|close assistant|stop assistant)\b", "exit"),
         # Help
@@ -189,9 +193,13 @@ class CommandProcessor(QObject):
                 "• System: 'Take a screenshot', 'System info'\n"
                 "• Volume: 'Volume up', 'Set volume to 50'\n"
                 "• Fun: 'Tell me a joke'\n"
+                "• Agents: 'Morning briefing' for emails & Jira\n"
                 "• AI chat: Just ask me anything!"
             )
             return CommandResult("help", help_text)
+
+        elif action == "briefing":
+            return CommandResult("briefing", "Preparing your morning briefing...", data={"agent": "briefing"})
 
         elif action == "screenshot":
             return CommandResult("screenshot", "Taking a screenshot...", data={"action": "screenshot"})
