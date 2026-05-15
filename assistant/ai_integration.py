@@ -4,6 +4,7 @@ and custom endpoints with automatic fallback to local responses.
 """
 
 import os
+import re
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -378,12 +379,44 @@ class AIManager(QObject):
                 return p
         return self.providers[-1]  # fallback
 
+    # Keywords/phrases that should NEVER be "corrected" by AI — they are valid commands.
+    _PASSTHROUGH_PATTERNS = re.compile(
+        r"\b("
+        r"briefing|newspaper|morning briefing|give briefing"
+        r"|open\s+\w+|launch\s+\w+|start\s+\w+|close\s+\w+"
+        r"|search\s+|google\s+"
+        r"|screenshot|take a screenshot"
+        r"|volume\s+(up|down|mute|\d+)|set volume|mute|unmute"
+        r"|what time|what date|what day|what is the time"
+        r"|system info|battery|cpu|memory|disk|ip address"
+        r"|help|exit|quit|bye|goodbye"
+        r"|hello|hi|hey|good morning|good afternoon|good evening"
+        r"|tell me a joke|joke"
+        r"|clear history|lock screen|lock pc"
+        r"|play music|pause music|stop music"
+        r"|list processes|show tasks"
+        r"|weather"
+        r")\b",
+        re.IGNORECASE,
+    )
+
+    def _is_clear_command(self, text: str) -> bool:
+        """Return True if text already matches a known command — no AI correction needed."""
+        return bool(self._PASSTHROUGH_PATTERNS.search(text))
+
     def rephrase_speech(self, raw_text: str):
         """Async STT correction: fixes speech recognition errors then emits speech_corrected(original, corrected).
 
         Uses a fast local model (llama3.1:8b) or Gemini if Ollama is unavailable.
         If no AI provider is available beyond LocalFallback, emits immediately with raw_text unchanged.
         """
+        # Skip correction if the text already looks like a clean, recognizable command.
+        # This prevents the AI from "correcting" valid commands like "morning briefing" → "good morning".
+        if self._is_clear_command(raw_text):
+            logger.info(f"STT text already matches a command, skipping correction: '{raw_text}'")
+            self.speech_corrected.emit(raw_text, raw_text)
+            return
+
         correction_provider = self._correction_provider or self.get_active_provider()
 
         # LocalFallback can't do corrections - pass through unchanged
@@ -453,17 +486,22 @@ class AIManager(QObject):
         self._worker.start()
 
     def ask_sync(self, user_message: str) -> str:
-        """Synchronous version for command processing."""
+        """Synchronous version for command processing. Tries all providers in order."""
         self.conversation_history.append({"role": "user", "content": user_message})
         if len(self.conversation_history) > 20:
             self.conversation_history = self.conversation_history[-16:]
 
         messages = [{"role": "system", "content": self.system_prompt}] + self.conversation_history
-        provider = self.get_active_provider()
-        result = provider.chat(messages, self.settings.get("max_tokens", 500))
-        if result:
-            self.conversation_history.append({"role": "assistant", "content": result})
-            return result
+
+        # Try each provider in order until one succeeds
+        for provider in self.providers:
+            if provider.is_available():
+                result = provider.chat(messages, self.settings.get("max_tokens", 500))
+                if result:
+                    self.conversation_history.append({"role": "assistant", "content": result})
+                    logger.info(f"ask_sync answered by {type(provider).__name__}")
+                    return result
+                logger.warning(f"ask_sync: {type(provider).__name__} returned empty, trying next")
         return "I couldn't generate a response. Please try again."
 
     def _on_response(self, text: str):

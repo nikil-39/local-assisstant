@@ -2,7 +2,7 @@
 Morning Briefing Agent — Generates a newspaper-style HTML briefing.
 
 Data sources:
-    1. Microsoft Outlook (today's emails + calendar) via MS Graph API
+    1. Microsoft Outlook (today's emails + calendar) via COM automation
     2. Jira tickets (assigned to user) via Jira REST API
     3. AI summary of everything via Ollama / Gemini
 
@@ -14,16 +14,12 @@ import json
 import logging
 import os
 import webbrowser
-import base64
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from assistant.agents.base_agent import BaseAgent
 
 logger = logging.getLogger("jarvis.agents.briefing")
-
-# Token cache location (gitignored)
-TOKEN_CACHE = Path(__file__).parent.parent.parent / "config" / ".ms_tokens.json"
 
 
 class BriefingAgent(BaseAgent):
@@ -37,102 +33,109 @@ class BriefingAgent(BaseAgent):
         self.ai_manager = ai_manager
         agent_cfg = settings.get("agents", {}).get("briefing", {})
 
-        # Microsoft Graph
-        self._ms_client_id = os.getenv("MS_CLIENT_ID", agent_cfg.get("ms_client_id", ""))
-        self._ms_client_secret = os.getenv("MS_CLIENT_SECRET", agent_cfg.get("ms_client_secret", ""))
-        self._ms_tenant_id = os.getenv("MS_TENANT_ID", agent_cfg.get("ms_tenant_id", ""))
-
         # Jira
         self._jira_url = os.getenv("JIRA_BASE_URL", agent_cfg.get("jira_base_url", ""))
         self._jira_pat = os.getenv("JIRA_PAT", agent_cfg.get("jira_pat", ""))
         self._jira_user = os.getenv("JIRA_USER", agent_cfg.get("jira_user", ""))
         self._jira_jql = agent_cfg.get(
             "jira_jql",
-            'project="Team Accelerate" AND assignee={user} AND status != Done ORDER BY updated DESC',
+            "assignee=currentUser() AND status != Done ORDER BY updated DESC",
         )
 
         # Output
         self._output_dir = Path(__file__).parent.parent.parent / "output"
         self._output_dir.mkdir(exist_ok=True)
 
-    # ── Microsoft Graph ───────────────────────────────────────────────
+    # ── Outlook COM ───────────────────────────────────────────────────
 
-    def _get_ms_token(self) -> str | None:
-        """Get MS Graph access token using client credentials flow."""
-        if not all([self._ms_client_id, self._ms_client_secret, self._ms_tenant_id]):
-            logger.warning("Microsoft credentials not configured — skipping email/calendar")
-            return None
-
+    def _fetch_emails(self) -> list[dict]:
+        """Fetch today's emails from Outlook via COM automation."""
         try:
-            import httpx
+            import pythoncom
+            import win32com.client
 
-            # Try cached token first
-            if TOKEN_CACHE.exists():
-                cached = json.loads(TOKEN_CACHE.read_text())
-                if cached.get("expires_at", 0) > datetime.now(timezone.utc).timestamp() + 60:
-                    return cached["access_token"]
+            pythoncom.CoInitialize()
+            try:
+                outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+                inbox = outlook.GetDefaultFolder(6)  # 6 = Inbox
+                messages = inbox.Items
+                messages.Sort("[ReceivedTime]", True)
 
-            # Request new token (client credentials flow)
-            token_url = f"https://login.microsoftonline.com/{self._ms_tenant_id}/oauth2/v2.0/token"
-            data = {
-                "grant_type": "client_credentials",
-                "client_id": self._ms_client_id,
-                "client_secret": self._ms_client_secret,
-                "scope": "https://graph.microsoft.com/.default",
-            }
-            with httpx.Client(timeout=15.0, verify=False) as client:
-                resp = client.post(token_url, data=data)
-                resp.raise_for_status()
-                token_data = resp.json()
+                today = datetime.now().replace(hour=0, minute=0, second=0)
+                today_str = today.strftime("%m/%d/%Y")
+                filtered = messages.Restrict(f"[ReceivedTime] >= '{today_str}'")
 
-            # Cache token
-            token_data["expires_at"] = datetime.now(timezone.utc).timestamp() + token_data.get("expires_in", 3600)
-            TOKEN_CACHE.write_text(json.dumps(token_data, indent=2))
-            return token_data["access_token"]
-
+                emails = []
+                for i in range(min(25, filtered.Count)):
+                    msg = filtered.Item(i + 1)
+                    try:
+                        emails.append({
+                            "subject": msg.Subject or "(no subject)",
+                            "from": {"emailAddress": {"name": msg.SenderName or "Unknown"}},
+                            "receivedDateTime": str(msg.ReceivedTime)[:19],
+                            "isRead": not msg.UnRead,
+                            "importance": "high" if msg.Importance == 2 else "normal",
+                            "bodyPreview": (msg.Body or "")[:150].replace("\r\n", " "),
+                        })
+                    except Exception as e:
+                        logger.debug(f"Skipping email {i}: {e}")
+                logger.info(f"Outlook COM: fetched {len(emails)} emails")
+                return emails
+            finally:
+                pythoncom.CoUninitialize()
+        except ImportError:
+            logger.warning("win32com not available — cannot read Outlook")
+            return []
         except Exception as e:
-            logger.error(f"MS Graph token error: {e}")
-            return None
-
-    def _fetch_emails(self, token: str) -> list[dict]:
-        """Fetch today's emails from Outlook via MS Graph."""
-        try:
-            import httpx
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
-            url = (
-                "https://graph.microsoft.com/v1.0/me/messages"
-                f"?$filter=receivedDateTime ge {today}"
-                "&$select=subject,from,receivedDateTime,isRead,importance,bodyPreview"
-                "&$orderby=receivedDateTime desc"
-                "&$top=25"
-            )
-            with httpx.Client(timeout=15.0, verify=False) as client:
-                resp = client.get(url, headers={"Authorization": f"Bearer {token}"})
-                resp.raise_for_status()
-                return resp.json().get("value", [])
-        except Exception as e:
-            logger.error(f"Failed to fetch emails: {e}")
+            logger.error(f"Outlook COM email error: {e}")
             return []
 
-    def _fetch_calendar(self, token: str) -> list[dict]:
-        """Fetch today's calendar events from Outlook via MS Graph."""
+    def _fetch_calendar(self) -> list[dict]:
+        """Fetch today's calendar events from Outlook via COM automation."""
         try:
-            import httpx
-            now = datetime.now(timezone.utc)
-            start = now.strftime("%Y-%m-%dT00:00:00Z")
-            end = now.strftime("%Y-%m-%dT23:59:59Z")
-            url = (
-                f"https://graph.microsoft.com/v1.0/me/calendarView"
-                f"?startDateTime={start}&endDateTime={end}"
-                "&$select=subject,start,end,organizer,location,isAllDay"
-                "&$orderby=start/dateTime"
-            )
-            with httpx.Client(timeout=15.0, verify=False) as client:
-                resp = client.get(url, headers={"Authorization": f"Bearer {token}"})
-                resp.raise_for_status()
-                return resp.json().get("value", [])
+            import pythoncom
+            import win32com.client
+
+            pythoncom.CoInitialize()
+            try:
+                outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+                cal = outlook.GetDefaultFolder(9)  # 9 = Calendar
+                items = cal.Items
+                items.IncludeRecurrences = True
+                items.Sort("[Start]")
+
+                today = datetime.now().replace(hour=0, minute=0, second=0)
+                tomorrow = today + timedelta(days=1)
+                restriction = (
+                    f"[Start] >= '{today.strftime('%m/%d/%Y')}' "
+                    f"AND [Start] < '{tomorrow.strftime('%m/%d/%Y')}'"
+                )
+                cal_items = items.Restrict(restriction)
+
+                events = []
+                count = min(20, cal_items.Count)
+                for i in range(count):
+                    apt = cal_items.Item(i + 1)
+                    try:
+                        events.append({
+                            "subject": apt.Subject or "(no subject)",
+                            "start": {"dateTime": str(apt.Start)[:16]},
+                            "end": {"dateTime": str(apt.End)[:16]},
+                            "organizer": {"emailAddress": {"name": getattr(apt, "Organizer", "")}},
+                            "location": {"displayName": getattr(apt, "Location", "")},
+                            "isAllDay": getattr(apt, "AllDayEvent", False),
+                        })
+                    except Exception as e:
+                        logger.debug(f"Skipping calendar item {i}: {e}")
+                logger.info(f"Outlook COM: fetched {len(events)} calendar events")
+                return events
+            finally:
+                pythoncom.CoUninitialize()
+        except ImportError:
+            logger.warning("win32com not available — cannot read Calendar")
+            return []
         except Exception as e:
-            logger.error(f"Failed to fetch calendar: {e}")
+            logger.error(f"Outlook COM calendar error: {e}")
             return []
 
     # ── Jira ──────────────────────────────────────────────────────────
@@ -145,7 +148,7 @@ class BriefingAgent(BaseAgent):
 
         try:
             import httpx
-            jql = self._jira_jql.replace("{user}", self._jira_user or "currentUser()")
+            jql = self._jira_jql
             api_url = f"{self._jira_url}/rest/api/2/search"
             params = {
                 "jql": jql,
@@ -157,7 +160,7 @@ class BriefingAgent(BaseAgent):
                 "Content-Type": "application/json",
             }
 
-            with httpx.Client(timeout=20.0, verify=False) as client:
+            with httpx.Client(timeout=20.0, verify=False, trust_env=False) as client:
                 resp = client.get(api_url, headers=headers, params=params)
                 resp.raise_for_status()
                 data = resp.json()
@@ -469,14 +472,10 @@ class BriefingAgent(BaseAgent):
         """Fetch all data, generate HTML, open in browser, return summary."""
         logger.info("Morning Briefing Agent starting...")
 
-        # 1. Fetch data
-        emails, calendar, tickets = [], [], []
-
-        ms_token = self._get_ms_token()
-        if ms_token:
-            emails = self._fetch_emails(ms_token)
-            calendar = self._fetch_calendar(ms_token)
-            logger.info(f"Outlook: {len(emails)} emails, {len(calendar)} meetings")
+        # 1. Fetch data from Outlook COM (no tokens needed)
+        emails = self._fetch_emails()
+        calendar = self._fetch_calendar()
+        logger.info(f"Outlook COM: {len(emails)} emails, {len(calendar)} meetings")
 
         tickets = self._fetch_jira_tickets()
         logger.info(f"Jira: {len(tickets)} tickets")
