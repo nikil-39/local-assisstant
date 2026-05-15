@@ -273,23 +273,31 @@ class BriefingAgent(BaseAgent):
                 <td>{location}</td>
             </tr>"""
 
-        # Jira rows
-        ticket_rows = ""
+        # Jira rows — filter to last 3 weeks only, and separate open vs closed
+        three_weeks_ago = (now - timedelta(days=21)).strftime("%Y-%m-%d")
+        ticket_rows_open = ""
+        ticket_rows_all = ""
         open_count = 0
         critical_count = 0
         for t in tickets:
             status = t["status"]
-            if status not in ("Done", "Closed", "Resolved"):
+            is_open = status not in ("Done", "Closed", "Resolved")
+            if is_open:
                 open_count += 1
             if t["priority"] in ("Blocker", "Critical"):
                 critical_count += 1
+
+            # Filter: only last 3 weeks by updated date
+            if t["updated"] < three_weeks_ago:
+                continue
+
             status_class = {
                 "Open": "status-open", "In Progress": "status-progress",
                 "Done": "status-done", "Closed": "status-done",
                 "To Do": "status-open",
             }.get(status, "status-open")
             days_badge = f'<span class="badge overdue">{t["days_open"]}d</span>' if t["days_open"] > 14 else f'{t["days_open"]}d'
-            ticket_rows += f"""
+            row = f"""
             <tr>
                 <td><strong>{t["key"]}</strong></td>
                 <td>{t["summary"]}</td>
@@ -299,6 +307,9 @@ class BriefingAgent(BaseAgent):
                 <td>{days_badge}</td>
                 <td>{t["updated"]}</td>
             </tr>"""
+            ticket_rows_all += row
+            if is_open:
+                ticket_rows_open += row
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -345,7 +356,13 @@ class BriefingAgent(BaseAgent):
   .stat-card {{
     flex: 1; min-width: 150px; background: var(--surface);
     border: 1px solid var(--border); border-radius: 10px;
-    padding: 16px; text-align: center;
+    padding: 16px; text-align: center; cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+    text-decoration: none; color: inherit;
+  }}
+  .stat-card:hover {{
+    transform: translateY(-3px);
+    border-color: var(--accent);
   }}
   .stat-card .number {{ font-size: 2em; font-weight: 700; }}
   .stat-card .label {{ color: var(--muted); font-size: 0.85em; }}
@@ -387,6 +404,25 @@ class BriefingAgent(BaseAgent):
     margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--border);
   }}
   .empty {{ color: var(--muted); font-style: italic; padding: 16px; }}
+  /* Collapsible Jira section */
+  details.jira-details {{
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 24px;
+  }}
+  details.jira-details summary {{
+    padding: 16px 20px; cursor: pointer; font-size: 1.2em;
+    color: var(--accent); font-weight: 600; list-style: none;
+    border-bottom: 1px solid var(--border); user-select: none;
+  }}
+  details.jira-details summary::-webkit-details-marker {{ display: none; }}
+  details.jira-details summary::before {{
+    content: '\\25B6'; margin-right: 10px; display: inline-block;
+    transition: transform 0.2s;
+  }}
+  details.jira-details[open] summary::before {{ transform: rotate(90deg); }}
+  details.jira-details .section-body {{ padding: 20px; }}
+  /* Smooth scroll */
+  html {{ scroll-behavior: smooth; }}
 </style>
 </head>
 <body>
@@ -406,27 +442,27 @@ class BriefingAgent(BaseAgent):
   '''}
 
   <div class="stats">
-    <div class="stat-card emails">
+    <a href="#emails" class="stat-card emails">
       <div class="number">{len(emails)}</div>
       <div class="label">Emails Today</div>
-    </div>
-    <div class="stat-card meetings">
+    </a>
+    <a href="#meetings" class="stat-card meetings">
       <div class="number">{len(calendar)}</div>
       <div class="label">Meetings</div>
-    </div>
-    <div class="stat-card tickets">
+    </a>
+    <a href="#open-tickets" class="stat-card tickets">
       <div class="number">{open_count}</div>
       <div class="label">Open Tickets</div>
-    </div>
-    <div class="stat-card critical">
+    </a>
+    <a href="#jira-all" class="stat-card critical">
       <div class="number">{critical_count}</div>
       <div class="label">Critical / Blocker</div>
-    </div>
+    </a>
   </div>
 
-  <div class="section">
+  <div class="section" id="emails">
     <h2>&#128231; Today's Emails</h2>
-    {"<p class='empty'>No emails fetched (credentials not configured or no emails today).</p>" if not emails else f'''
+    {"<p class='empty'>No emails fetched (Outlook not running or no emails today).</p>" if not emails else f'''
     <table>
       <thead><tr><th>Subject</th><th>From</th><th>Preview</th><th>Received</th></tr></thead>
       <tbody>{email_rows}</tbody>
@@ -434,9 +470,9 @@ class BriefingAgent(BaseAgent):
     '''}
   </div>
 
-  <div class="section">
+  <div class="section" id="meetings">
     <h2>&#128197; Today's Meetings</h2>
-    {"<p class='empty'>No meetings fetched (credentials not configured or free day!).</p>" if not calendar else f'''
+    {"<p class='empty'>No meetings today — free day!</p>" if not calendar else f'''
     <table>
       <thead><tr><th>Time</th><th>Subject</th><th>Organizer</th><th>Location</th></tr></thead>
       <tbody>{cal_rows}</tbody>
@@ -444,15 +480,27 @@ class BriefingAgent(BaseAgent):
     '''}
   </div>
 
-  <div class="section">
-    <h2>&#127919; Jira Tickets</h2>
-    {"<p class='empty'>No Jira tickets fetched (credentials not configured).</p>" if not tickets else f'''
+  <div class="section" id="open-tickets">
+    <h2>&#127919; Open Tickets ({open_count})</h2>
+    {"<p class='empty'>No open tickets — all clear!</p>" if not ticket_rows_open else f'''
     <table>
       <thead><tr><th>Key</th><th>Summary</th><th>Status</th><th>Priority</th><th>Type</th><th>Age</th><th>Updated</th></tr></thead>
-      <tbody>{ticket_rows}</tbody>
+      <tbody>{ticket_rows_open}</tbody>
     </table>
     '''}
   </div>
+
+  <details class="jira-details" id="jira-all">
+    <summary>&#128202; All Jira Tickets (last 3 weeks)</summary>
+    <div class="section-body">
+    {"<p class='empty'>No Jira tickets in the last 3 weeks.</p>" if not ticket_rows_all else f'''
+    <table>
+      <thead><tr><th>Key</th><th>Summary</th><th>Status</th><th>Priority</th><th>Type</th><th>Age</th><th>Updated</th></tr></thead>
+      <tbody>{ticket_rows_all}</tbody>
+    </table>
+    '''}
+    </div>
+  </details>
 
   <div class="footer">
     Generated by Jarvis &mdash; {date_str} at {time_str}
