@@ -293,7 +293,188 @@ class VoskSTTWorker(QThread):
             logger.info(f"Vosk recognized: \"{full_text}\"")
             self.text_recognized.emit(full_text)
         else:
-            self.error_occurred.emit("No speech detected. Try speaking louder or closer to the mic.")
+            logger.info("Vosk: No speech recognized")
+            self.error_occurred.emit("No speech detected")
+
+
+class WhisperSTTWorker(QThread):
+    """Speech-to-Text using Faster-Whisper (offline, high accuracy).
+    
+    Records audio via PyAudio, then transcribes with Faster-Whisper model.
+    More accurate than Vosk, especially for unclear speech.
+    """
+    text_recognized = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+    listening_started = pyqtSignal()
+    listening_stopped = pyqtSignal()
+    audio_level = pyqtSignal(float)
+
+    # Class-level model cache to avoid reloading on each recognition
+    _model = None
+    _model_size = None
+
+    def __init__(self, model_size: str = "medium", timeout: int = 10, phrase_timeout: float = 2.0):
+        super().__init__()
+        self.model_size = model_size
+        self.timeout = timeout
+        self.phrase_timeout = phrase_timeout
+
+    @classmethod
+    def get_model(cls, model_size: str):
+        """Get or create cached Whisper model."""
+        if cls._model is None or cls._model_size != model_size:
+            from faster_whisper import WhisperModel
+            from pathlib import Path
+            
+            # Check for local model first (avoids proxy issues)
+            local_model_path = Path(__file__).parent.parent / "assets" / f"whisper-{model_size}"
+            if local_model_path.exists() and (local_model_path / "model.bin").exists():
+                model_path = str(local_model_path)
+                logger.info(f"Loading Whisper model from local path: {model_path}")
+            else:
+                model_path = model_size  # Download from HuggingFace
+                logger.info(f"Loading Whisper model: {model_size} (downloading if needed)")
+            
+            # Use CPU with int8 for good speed/accuracy balance
+            cls._model = WhisperModel(model_path, device="cpu", compute_type="int8")
+            cls._model_size = model_size
+            logger.info("Whisper model loaded successfully")
+        return cls._model
+
+    @classmethod
+    def is_model_available(cls, model_size: str) -> tuple[bool, str]:
+        """Check if Whisper model can be loaded. Returns (success, error_msg)."""
+        try:
+            cls.get_model(model_size)
+            return True, ""
+        except Exception as e:
+            error_msg = str(e)
+            if "407" in error_msg or "Proxy" in error_msg:
+                return False, "Proxy authentication required. Download model manually or use Vosk."
+            if "Invalid port" in error_msg:
+                return False, "Proxy configuration issue (NO_PROXY). Use Vosk or fix proxy settings."
+            return False, f"Model load failed: {error_msg[:100]}"
+
+    def run(self):
+        try:
+            import pyaudio
+            import tempfile
+            import wave
+            import os
+        except ImportError as e:
+            self.error_occurred.emit(f"Missing dependency: {e}")
+            return
+
+        # Pre-load model before listening to reduce delay
+        try:
+            model = self.get_model(self.model_size)
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to load Whisper model: {e}")
+            return
+
+        # Setup audio recording
+        pa = pyaudio.PyAudio()
+        try:
+            stream = pa.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=4096,
+            )
+        except Exception as e:
+            pa.terminate()
+            self.error_occurred.emit(f"Cannot open microphone: {e}")
+            return
+
+        self.listening_started.emit()
+        logger.info("Whisper: Listening... speak now!")
+
+        import time
+        start_time = time.time()
+        last_sound_time = 0.0
+        has_speech = False
+        audio_frames = []
+        silence_threshold = 500  # RMS threshold for speech detection
+
+        try:
+            while True:
+                elapsed = time.time() - start_time
+
+                # Hard timeout if no speech yet
+                if elapsed > self.timeout and not has_speech:
+                    break
+
+                # If we heard speech, stop after silence
+                if has_speech and (time.time() - last_sound_time) > self.phrase_timeout:
+                    break
+
+                # Max total time cap
+                if elapsed > self.timeout + 10:
+                    break
+
+                data = stream.read(4096, exception_on_overflow=False)
+                audio_frames.append(data)
+
+                # Calculate and emit audio level
+                samples = struct.unpack(f"<{len(data)//2}h", data)
+                rms = math.sqrt(sum(s * s for s in samples) / len(samples))
+                level = min(rms / 8000.0, 1.0)
+                self.audio_level.emit(level)
+
+                # Detect speech
+                if rms > silence_threshold:
+                    has_speech = True
+                    last_sound_time = time.time()
+
+        finally:
+            stream.stop_stream()
+            stream.close()
+            pa.terminate()
+
+        self.listening_stopped.emit()
+
+        if not audio_frames or not has_speech:
+            logger.info("Whisper: No speech detected")
+            self.error_occurred.emit("No speech detected")
+            return
+
+        # Save audio to temp file for Whisper
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                temp_path = f.name
+                wf = wave.open(f, 'wb')
+                wf.setnchannels(1)
+                wf.setsampwidth(2)  # 16-bit
+                wf.setframerate(16000)
+                wf.writeframes(b''.join(audio_frames))
+                wf.close()
+
+            # Transcribe with Whisper
+            logger.info("Transcribing with Whisper...")
+            segments, info = model.transcribe(
+                temp_path,
+                language="en",
+                beam_size=5,
+                vad_filter=True,  # Filter out non-speech
+            )
+
+            full_text = " ".join(seg.text for seg in segments).strip()
+
+            # Clean up temp file
+            os.unlink(temp_path)
+
+        except Exception as e:
+            logger.error(f"Whisper transcription error: {e}")
+            self.error_occurred.emit(f"Transcription error: {e}")
+            return
+
+        if full_text:
+            logger.info(f"Whisper recognized: \"{full_text}\"")
+            self.text_recognized.emit(full_text)
+        else:
+            logger.info("Whisper: No speech recognized")
+            self.error_occurred.emit("No speech detected")
 
 
 class WindowsSTTWorker(QThread):
@@ -499,8 +680,26 @@ class VoiceHandler(QObject):
         # Choose STT engine
         stt_engine = self.settings.get("stt_engine", "vosk")
 
+        if stt_engine == "whisper":
+            # Faster-Whisper — highest accuracy, transcribes after recording
+            model_size = self.settings.get("whisper_model", "medium")
+            # Pre-check if model is available (may fail due to proxy)
+            available, err = WhisperSTTWorker.is_model_available(model_size)
+            if not available:
+                logger.warning(f"Whisper unavailable: {err}. Falling back to Vosk.")
+                self.error_occurred.emit(f"Whisper unavailable, using Vosk: {err}")
+                stt_engine = "vosk"  # fall through to vosk
+            else:
+                self._stt_worker = WhisperSTTWorker(
+                    model_size=model_size,
+                    timeout=self.settings.get("listen_timeout", 10),
+                    phrase_timeout=self.settings.get("pause_threshold", 2.0),
+                )
+                # Whisper worker provides its own audio levels
+                self._stt_worker.audio_level.connect(self.audio_level.emit)
+
         if stt_engine == "vosk":
-            # Vosk — best offline accuracy, streams audio in real-time
+            # Vosk — good offline accuracy, streams audio in real-time
             from pathlib import Path
             model_path = str(Path(__file__).parent.parent / "assets" / "vosk-model")
             if not Path(model_path).exists():
@@ -527,8 +726,8 @@ class VoiceHandler(QObject):
                 logger.warning("SpeechRecognition not installed, falling back to Windows SAPI")
                 self._stt_worker = WindowsSTTWorker(self.settings.get("listen_timeout", 10))
 
-        # Start audio level monitor (for non-Vosk engines)
-        if stt_engine != "vosk":
+        # Start audio level monitor (for engines that don't provide their own)
+        if stt_engine not in ("vosk", "whisper"):
             self._audio_monitor = AudioLevelMonitor()
             self._audio_monitor.level_updated.connect(self.audio_level.emit)
             self._audio_monitor.start()

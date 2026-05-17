@@ -22,6 +22,9 @@ package-lock.json
 vosk-model*/
 assets/vosk-model/
 
+# Whisper model weights (large binary, download separately)
+assets/whisper-*/model.bin
+
 # Temp files
 *.wav
 *.mp3

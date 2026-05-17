@@ -1,18 +1,7 @@
 {
   "webpage": {
-    "_readme": "Jarvis 'visit webpage' agent corrections. Key = exactly what Vosk heard (lowercase). Value = correct phrase. Delete or fix any wrong entry. Jarvis picks up changes on next startup.",
-    "hey plan your bills in bit beckett": "pipeline-utils in bitbucket",
-    "pipeline utils in bitbucket": "pipeline-utils in bitbucket",
-    "pipeline you tools in bitbucket": "pipeline-utils in bitbucket",
-    "pipeline you tills in bit beckett": "pipeline-utils in bitbucket",
-    "pipeline you tools in bit beckett": "pipeline-utils in bitbucket",
-    "pipe line utils in bitbucket": "pipeline-utils in bitbucket",
-    "by plane you tilts in but beckett": "pipeline-utils in bitbucket",
-    "by plane you did it's": "pipelines in bitbucket",
-    "cx data visualization mean bit because": "cx-data-visualization in bitbucket",
-    "by blame buddhists in but make it": "pipeline-tool in bitbucket",
-    "by plane foods": "pipeline-tool in bitbucket",
-    "by plane duties": "pipeline-tool in bitbucket"
+    "_readme": "Jarvis 'visit webpage' agent corrections. Key = exactly what Vosk heard (lowercase). Value = correct phrase. Delete or fix any wrong entry. Jarvis picks up changes on next startup."
+
   },
   "apps": {
     "_readme": "Open/close app corrections. Key = garbled app name Vosk heard. Value = correct app name from commands.json aliases."
