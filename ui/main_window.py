@@ -269,6 +269,9 @@ class JarvisMainWindow(QMainWindow):
         self._drag_pos = None
         self._state = AssistantState.IDLE
         self._chat_visible = False
+        self._pending_context: str | None = None  # e.g. "webpage" after "open webpage"
+        # Stores (raw_vosk, ai_corrected, source) until agent confirms success/failure
+        self._pending_webpage_correction: tuple[str, str, str] | None = None
 
         # Load configuration
         self.ui_settings = settings.get("ui", {})
@@ -692,8 +695,9 @@ class JarvisMainWindow(QMainWindow):
         self._raw_speech_text = text  # store for comparison
         # Show raw transcription immediately so the user sees what was heard
         self._set_status(f'Heard: "{text}" — correcting...')
-        # Trigger AI correction; _on_speech_corrected will process the result
-        self.ai_manager.rephrase_speech(text)
+        # Pass the active context so the AI uses the right correction prompt.
+        # e.g. when _pending_context == 'webpage', the AI knows we want a page name.
+        self.ai_manager.rephrase_speech(text, context=self._pending_context)
 
     def _on_speech_corrected(self, original: str, corrected: str):
         """Called after AI corrects STT output. Process the corrected command."""
@@ -706,8 +710,26 @@ class JarvisMainWindow(QMainWindow):
         self._add_chat_message(display, is_user=True)
         self._set_status(f'Processing: "{corrected or original}"')
 
-        # Process the corrected (or original if unchanged) command
-        result = self.command_processor.process(corrected or original)
+        text = corrected or original
+
+        # ── Pending context: route to waiting agent ───────────────────
+        if self._pending_context == "webpage":
+            self._pending_context = None
+            # Determine where the corrected text came from
+            if corrected and corrected.lower() != original.lower():
+                source = "ai"
+            else:
+                source = "passthrough"
+            # Store for deferred learning — we save to cache ONLY after the agent
+            # confirms it actually opened something (see _on_agent_finished)
+            self._pending_webpage_correction = (original, corrected or original, source)
+            from assistant.command_processor import CommandResult
+            result = CommandResult("open_webpage", "Opening...", data={"query": text})
+            self._handle_command_result(result)
+            return
+
+        # Normal routing
+        result = self.command_processor.process(text)
         self._handle_command_result(result)
 
     def _on_speech_started(self):
@@ -742,6 +764,30 @@ class JarvisMainWindow(QMainWindow):
         self._set_status(f"{agent_name} complete")
         self.voice_handler.speak(summary)
 
+        # ── Webpage correction learning ──────────────────────────
+        if agent_name == "Web Page" and self._pending_webpage_correction:
+            raw, corrected, source = self._pending_webpage_correction
+            self._pending_webpage_correction = None
+            # Success = agent actually opened something (not an error/not-found message)
+            success = summary.lower().startswith("opening")
+            # Log every attempt so user can review config/webpage_corrections_log.jsonl
+            self.ai_manager.log_webpage_attempt(raw, corrected, summary, success, source)
+            # Only cache verified successes — prevents wrong guesses from poisoning the cache
+            if success and source == "ai" and corrected.lower() != raw.lower():
+                self.ai_manager.save_webpage_correction(raw, corrected)
+
+    def _on_webpage_prompt_ready(self, agent_name: str, prompt: str):
+        """First step of 'open webpage': speak the prompt then listen for the page name."""
+        self._add_chat_message(prompt, is_user=False)
+        self.response_label.setText(prompt[:150] + ("..." if len(prompt) > 150 else ""))
+        self._pending_context = "webpage"
+        self._set_status("Waiting for page name — speak now...")
+        # Speak the prompt; when TTS finishes, _on_speech_finished will idle.
+        # We auto-start listening after speaking.
+        self.voice_handler.speak(prompt)
+        # Start listening after a short delay to let TTS finish
+        QTimer.singleShot(3500, self._toggle_listening)
+
     def _on_agent_error(self, agent_name: str, error: str):
         """Called when a background agent fails."""
         msg = f"{agent_name} failed: {error}"
@@ -773,6 +819,17 @@ class JarvisMainWindow(QMainWindow):
         # Check if an agent handles this action
         agent = self.agent_registry.match(result.action)
         if agent:
+            # ── Two-step "open webpage" flow ──────────────────────────────────
+            # First trigger: no query yet → agent returns the help prompt and we
+            # set _pending_context so the next voice input is routed back here.
+            if result.action == "open_webpage" and not result.data.get("query"):
+                self._set_status("Waiting for page name...")
+                self._agent_worker = AgentWorker(agent, {})
+                self._agent_worker.finished.connect(self._on_webpage_prompt_ready)
+                self._agent_worker.error.connect(self._on_agent_error)
+                self._agent_worker.start()
+                return
+
             self._add_chat_message(result.response, is_user=False)
             self.voice_handler.speak(result.response)
             self._set_status(f"Running {agent.name}...")

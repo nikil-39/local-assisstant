@@ -3,6 +3,7 @@ System Controller Module - Handles file operations, app launching,
 web browsing, system info, volume control, screenshots, and process management.
 """
 
+import difflib
 import os
 import re
 import json
@@ -50,6 +51,14 @@ class SystemController:
                 if key in alias_key or alias_key in key:
                     target = alias_val
                     break
+
+        # 4) Fuzzy match: recovers from Vosk mishearings (e.g. "themes" → "teams")
+        if not target:
+            candidates = list(self.app_aliases.keys())
+            matches = difflib.get_close_matches(key, candidates, n=1, cutoff=0.6)
+            if matches:
+                logger.info(f"Fuzzy matched app '{key}' → '{matches[0]}'")
+                target = self.app_aliases[matches[0]]
 
         if not target:
             target = key  # fallback: try the raw name
@@ -100,23 +109,92 @@ class SystemController:
         except Exception as e:
             return f"Failed to open {app_name}: {e}"
 
+    # Map alias executable targets → real .exe process names for taskkill
+    _ALIAS_TO_PROCESS = {
+        "chrome": "chrome",
+        "msedge": "msedge",
+        "C:\\Program Files\\Mozilla Firefox\\firefox.exe": "firefox",
+        "winword": "winword",
+        "excel": "excel",
+        "powerpnt": "powerpnt",
+        "msaccess": "msaccess",
+        "mspub": "mspub",
+        "ms-teams:": "ms-teams",
+        "onenote": "onenote",
+        "notepad": "notepad",
+        "wordpad": "wordpad",
+        "calc": "calculator",
+        "explorer": "explorer",
+        "wt": "WindowsTerminal",
+        "cmd": "cmd",
+        "powershell": "powershell",
+        "code": "code",
+        "devenv": "devenv",
+        "AcroRd32": "AcroRd32",
+        "KeePass": "KeePass",
+        "Screenpresso": "Screenpresso",
+        "saplogon": "saplogon",
+        "mspaint": "mspaint",
+        "snippingtool": "SnippingTool",
+        "wmplayer": "wmplayer",
+        "vpnui": "vpnui",
+        "SelfServicePlugin": "SelfService",
+        "zoom": "Zoom",
+        "slack": "slack",
+        "discord": "Discord",
+        "spotify": "Spotify",
+        "Telegram": "Telegram",
+        "taskmgr": "Taskmgr",
+        "outlook": "outlook",
+    }
+
     def close_app(self, app_name: str) -> str:
         """Close an application by process name."""
         key = app_name.lower().strip()
-        target = self.app_aliases.get(key, key)
 
-        # Map common names to process names
-        process_map = {
-            "chrome": "chrome", "firefox": "firefox", "edge": "msedge",
-            "notepad": "notepad", "outlook": "outlook", "teams": "teams",
-            "word": "winword", "excel": "excel", "code": "code",
-            "spotify": "spotify", "discord": "discord", "slack": "slack",
-        }
-        proc_name = process_map.get(target, target)
+        # Remove command words that may be in the parsed text
+        for word in ("close", "kill", "stop", "end", "the", "application", "app", "please"):
+            key = key.replace(word, "").strip()
+
+        # 1) Exact alias lookup → get executable target name
+        target = self.app_aliases.get(key)
+
+        # 2) Partial alias match
+        if not target:
+            for alias_key, alias_val in self.app_aliases.items():
+                if key in alias_key or alias_key in key:
+                    target = alias_val
+                    break
+
+        # 3) Fuzzy alias match
+        if not target:
+            candidates = list(self.app_aliases.keys())
+            matches = difflib.get_close_matches(key, candidates, n=1, cutoff=0.6)
+            if matches:
+                target = self.app_aliases[matches[0]]
+
+        if not target:
+            target = key
+
+        # Resolve to actual .exe process name
+        proc_name = self._ALIAS_TO_PROCESS.get(target, target)
+        # Strip path separators if a full path was given
+        if os.sep in proc_name or "/" in proc_name:
+            proc_name = Path(proc_name).stem
+        # Strip URI scheme suffix
+        proc_name = proc_name.rstrip(":")
 
         try:
-            subprocess.run(
+            result = subprocess.run(
                 ["taskkill", "/IM", f"{proc_name}.exe", "/F"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                return f"Closed {app_name}."
+            # If exact name failed, try a case-insensitive wildcard via PowerShell
+            ps_result = subprocess.run(
+                ["powershell", "-Command",
+                 f'Get-Process | Where-Object {{$_.Name -like "*{proc_name}*"}} | Stop-Process -Force'],
                 capture_output=True, text=True, timeout=10,
             )
             return f"Closed {app_name}."

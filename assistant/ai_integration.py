@@ -7,6 +7,9 @@ import os
 import re
 import json
 import logging
+import difflib
+from datetime import datetime
+from pathlib import Path
 from abc import ABC, abstractmethod
 
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
@@ -320,6 +323,14 @@ class AIManager(QObject):
         self._rephrase_worker = None
         # Dedicated fast local model for STT correction (avoids blocking large model)
         self._correction_provider: AIProvider | None = None
+        # Persistent corrections cache — sectioned by domain
+        # File: config/stt_corrections.json
+        # Sections: "webpage", "apps", "briefing", "general"
+        self._corrections_cache_path = Path(__file__).parent.parent / "config" / "stt_corrections.json"
+        # Append-only audit log: every attempt with success/failure flag
+        self._corrections_log_path = Path(__file__).parent.parent / "config" / "stt_corrections_log.jsonl"
+        self._corrections_cache: dict[str, str] = self._load_corrections_cache()
+        self._general_cache: dict[str, str] = self._load_general_cache()
         self._init_providers()
 
     def _init_providers(self):
@@ -383,6 +394,7 @@ class AIManager(QObject):
     _PASSTHROUGH_PATTERNS = re.compile(
         r"\b("
         r"briefing|newspaper|morning briefing|give briefing"
+        r"|visit\s+web\s*page"
         r"|open\s+\w+|launch\s+\w+|start\s+\w+|close\s+\w+"
         r"|search\s+|google\s+"
         r"|screenshot|take a screenshot"
@@ -404,18 +416,178 @@ class AIManager(QObject):
         """Return True if text already matches a known command — no AI correction needed."""
         return bool(self._PASSTHROUGH_PATTERNS.search(text))
 
-    def rephrase_speech(self, raw_text: str):
+    # ── Corrections cache ──────────────────────────────────────────
+    #
+    # config/stt_corrections.json structure:
+    # {
+    #   "webpage":  { "<garbled>": "<correct>" },
+    #   "apps":     { "<garbled>": "<correct>" },
+    #   "briefing": { "<garbled>": "<correct>" }
+    # }
+    #
+    # Edit any section manually to fix wrong entries or add new ones.
+    # Jarvis reloads the file on the NEXT startup automatically.
+
+    _EMPTY_SECTIONS: dict = {"webpage": {}, "apps": {}, "briefing": {}, "general": {}}
+
+    def _load_corrections_cache(self) -> dict[str, str]:
+        """Load the 'webpage' section from the sectioned stt_corrections.json."""
+        try:
+            if self._corrections_cache_path.exists():
+                data = json.loads(self._corrections_cache_path.read_text(encoding="utf-8"))
+                # Skip _readme comment keys
+                cache = {k: v for k, v in data.get("webpage", {}).items()
+                         if not k.startswith("_")}
+                logger.info(f"Corrections cache loaded: {len(cache)} webpage entries")
+                return cache
+        except Exception as e:
+            logger.warning(f"Could not load corrections cache: {e}")
+        return {}
+
+    def _load_general_cache(self) -> dict[str, str]:
+        """Load the 'general' section from stt_corrections.json."""
+        try:
+            if self._corrections_cache_path.exists():
+                data = json.loads(self._corrections_cache_path.read_text(encoding="utf-8"))
+                cache = {k: v for k, v in data.get("general", {}).items()
+                         if not k.startswith("_")}
+                logger.info(f"Corrections cache loaded: {len(cache)} general entries")
+                return cache
+        except Exception as e:
+            logger.warning(f"Could not load general corrections cache: {e}")
+        return {}
+
+    def _read_full_corrections_file(self) -> dict:
+        """Read the full sectioned JSON, returning defaults if missing/corrupt."""
+        if self._corrections_cache_path.exists():
+            try:
+                return json.loads(self._corrections_cache_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        return {k: {} for k in self._EMPTY_SECTIONS}
+
+    def _lookup_corrections_cache(self, raw_text: str, cache: dict[str, str] | None = None) -> str | None:
+        """Return a known-good correction for raw_text from the given cache, or None."""
+        if cache is None:
+            cache = self._corrections_cache
+        key = raw_text.lower().strip()
+        # 1. Exact hit
+        if key in cache:
+            logger.info(f"Corrections cache exact hit: '{raw_text}' \u2192 '{cache[key]}'")
+            return cache[key]
+        # 2. Fuzzy hit (same garbled phrase with slight variation)
+        matches = difflib.get_close_matches(key, list(cache.keys()), n=1, cutoff=0.82)
+        if matches:
+            result = cache[matches[0]]
+            logger.info(f"Corrections cache fuzzy hit: '{raw_text}' ≈ '{matches[0]}' → '{result}'")
+            return result
+        return None
+
+    def save_webpage_correction(self, raw_text: str, corrected: str) -> None:
+        """Write a VERIFIED correction into the 'webpage' section of stt_corrections.json.
+
+        Called only after the agent confirms it successfully opened something.
+        The file is human-editable. Sections: webpage, apps, briefing.
+        """
+        if not raw_text or not corrected:
+            return
+        key = raw_text.lower().strip()
+        val = corrected.strip()
+        if key == val or self._corrections_cache.get(key) == val:
+            return  # nothing new to save
+        self._corrections_cache[key] = val
+        try:
+            self._corrections_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            data = self._read_full_corrections_file()
+            # Ensure all sections exist
+            for section in self._EMPTY_SECTIONS:
+                data.setdefault(section, {})
+            data["webpage"][key] = val
+            self._corrections_cache_path.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            logger.info(f"Corrections cache saved [webpage]: '{raw_text}' → '{corrected}' ({len(data['webpage'])} entries)")
+        except Exception as e:
+            logger.error(f"Failed to save corrections cache: {e}")
+
+    def log_webpage_attempt(
+        self,
+        raw_vosk: str,
+        ai_corrected: str,
+        action_taken: str,
+        success: bool,
+        source: str = "ai",   # "ai" | "cache" | "passthrough"
+    ) -> None:
+        """Append one record to stt_corrections_log.jsonl.
+
+        Every voice attempt in webpage-context is logged here regardless of
+        success so the user can review, spot mistakes, and manually fix the
+        cache (stt_corrections.json → \"webpage\" section).
+
+        Log schema:
+            ts          – ISO timestamp
+            context     – which agent/section this belongs to (e.g. 'webpage')
+            raw         – exactly what Vosk transcribed
+            corrected   – what the AI (or cache) mapped it to
+            opened      – the final string the agent acted on
+            success     – true if the agent actually opened something
+            source      – where the corrected value came from
+        """
+        record = {
+            "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "context": "webpage",
+            "raw": raw_vosk,
+            "corrected": ai_corrected,
+            "opened": action_taken,
+            "success": success,
+            "source": source,
+        }
+        try:
+            self._corrections_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._corrections_log_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+            status = "SUCCESS" if success else "FAILURE"
+            logger.info(
+                f"Correction log [{status}]: '{raw_vosk}' → '{ai_corrected}' (opened: '{action_taken}')"
+            )
+        except Exception as e:
+            logger.error(f"Failed to write corrections log: {e}")
+
+    def rephrase_speech(self, raw_text: str, context: str | None = None):
         """Async STT correction: fixes speech recognition errors then emits speech_corrected(original, corrected).
+
+        Args:
+            raw_text: Raw transcription from Vosk.
+            context:  Optional hint about what kind of input we're expecting.
+                      'webpage' → use a Jira/Bitbucket-aware correction prompt.
 
         Uses a fast local model (llama3.1:8b) or Gemini if Ollama is unavailable.
         If no AI provider is available beyond LocalFallback, emits immediately with raw_text unchanged.
         """
-        # Skip correction if the text already looks like a clean, recognizable command.
-        # This prevents the AI from "correcting" valid commands like "morning briefing" → "good morning".
-        if self._is_clear_command(raw_text):
+        # When a specific context is active we ALWAYS attempt correction because
+        # the garbled text may accidentally match an unrelated passthrough pattern.
+        if context is None and self._is_clear_command(raw_text):
             logger.info(f"STT text already matches a command, skipping correction: '{raw_text}'")
             self.speech_corrected.emit(raw_text, raw_text)
             return
+
+        # ── Corrections cache (instant, no AI call needed) ──────────────────
+        if context == "webpage":
+            cached = self._lookup_corrections_cache(raw_text, self._corrections_cache)
+            if cached:
+                self._log_general_correction(raw_text, cached, source="cache", context="webpage")
+                self.speech_corrected.emit(raw_text, cached)
+                return
+        elif context is None:
+            # Check general corrections cache before sending to AI
+            cached = self._lookup_corrections_cache(raw_text, self._general_cache)
+            if cached:
+                logger.info(f"General cache hit: '{raw_text}' \u2192 '{cached}'")
+                self._log_general_correction(raw_text, cached, source="cache", context="general")
+                self.speech_corrected.emit(raw_text, cached)
+                return
+        # ───────────────────────────────────────────
 
         correction_provider = self._correction_provider or self.get_active_provider()
 
@@ -425,49 +597,140 @@ class AIManager(QObject):
             self.speech_corrected.emit(raw_text, raw_text)
             return
 
-        logger.info(f"STT correction requested via {type(correction_provider).__name__}: '{raw_text}'")
+        logger.info(f"STT correction requested via {type(correction_provider).__name__}: '{raw_text}' (context={context!r})")
+
+        # ── Build context-specific system prompt ──────────────────────────────
+        if context == "webpage":
+            # Build a full repo list with both folder name and kebab slug
+            try:
+                _git = Path(r"C:\Git")
+                if _git.exists():
+                    _repo_entries = []
+                    for d in sorted(_git.iterdir()):
+                        if d.is_dir():
+                            # kebab slug: lowercase, underscores/spaces → hyphens
+                            slug = re.sub(r"[\s_]+", "-", d.name.lower())
+                            slug = re.sub(r"[^a-z0-9\-]", "", slug).strip("-")
+                            entry = d.name if slug == d.name.lower() else f"{d.name} ({slug})"
+                            _repo_entries.append(entry)
+                    _repos = ", ".join(_repo_entries)
+                else:
+                    _repos = "pipelines, cx-data-visualization, asmp-dev"
+            except Exception:
+                _repos = "pipelines, cx-data-visualization, asmp-dev, pipeline-tools"
+
+            system_content = (
+                "You are a speech-to-text error corrector for a voice assistant. "
+                "The assistant just asked: 'Which page would you like to open?' "
+                "The user spoke a page name but the microphone garbled it badly. "
+                "Your job: recover the EXACT page or Bitbucket repository they meant.\n\n"
+                "The user can say:\n"
+                "  - 'jira'                    → Jira dashboard\n"
+                "  - 'kanban board'            → Kanban sprint board\n"
+                "  - 'ci cd board' / 'cicd'   → CI/CD pipeline board\n"
+                "  - '[repo name] in bitbucket' → open that Bitbucket repository\n\n"
+                f"ALL known repositories (folder name and URL slug): {_repos}\n\n"
+                "Phonetic garbling examples (STT output → true intent):\n"
+                "  'biplanes in be bigot'          → 'pipelines in bitbucket'\n"
+                "  'pipe lines in big cat'         → 'pipelines in bitbucket'\n"
+                "  'he is simply dove in bigot'    → 'asmp-dev in bitbucket'\n"
+                "  'simply dove in bit beckett'    → 'asmp-dev in bitbucket'\n"
+                "  'amp dev in bitbucket'          → 'asmp-dev in bitbucket'\n"
+                "  'see ex data' / 'cx data'       → 'cx data visualization in bitbucket'\n"
+                "  'main path in bitbucket'        → 'mainpath-accelerator in bitbucket'\n"
+                "  'canada board'                  → 'kanban board'\n"
+                "  'see i cd board'                → 'ci cd board'\n\n"
+                "Rules:\n"
+                "1. Output ONLY the corrected phrase — no explanation, no quotes.\n"
+                "2. Keep 'in bitbucket' at the end when the user means a repo.\n"
+                "3. Match phonetically against the repo list above — even partial or acronym sounds count.\n"
+                "4. If you cannot determine the intent, return the input unchanged."
+            )
+        else:
+            system_content = (
+                "You are a speech-to-text error corrector. "
+                "The user spoke a command but the microphone garbled it. "
+                "Output ONLY the corrected command — nothing else.\n\n"
+                "Known commands:\n"
+                "  - 'visit webpage' (opens the webpage agent)\n"
+                "  - 'morning briefing' / 'briefing' / 'newspaper'\n"
+                "  - 'open [app]' / 'close [app]'\n"
+                "  - 'what time is it' / 'what is the date'\n"
+                "  - 'take a screenshot'\n"
+                "  - 'volume up' / 'volume down' / 'set volume to 50'\n"
+                "  - 'tell me a joke'\n"
+                "  - 'hello' / 'help'\n\n"
+                "Phonetic examples:\n"
+                "  'the sit the beach' → 'visit webpage'\n"
+                "  'page' → 'visit webpage'\n"
+                "  'visit the page' → 'visit webpage'\n"
+                "  'what does the pain' → 'what is the time'\n"
+                "  'take his green shot' → 'take a screenshot'\n\n"
+                "CRITICAL: Output ONLY the command. No quotes. No explanation. No notes. No newlines. "
+                "Just the corrected text on a single line."
+            )
 
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a speech-to-text error corrector for a desktop voice assistant named Jarvis. "
-                    "The user spoke a voice command but the STT engine garbled it. "
-                    "Your job: figure out what the user MOST LIKELY meant and return ONLY that corrected command.\n\n"
-                    "Jarvis handles commands like:\n"
-                    "  - time/date: 'what time is it', 'what is the date'\n"
-                    "  - apps: 'open Chrome', 'launch Notepad', 'close Spotify'\n"
-                    "  - web: 'search for Python tutorials', 'open youtube.com'\n"
-                    "  - system: 'take a screenshot', 'system info', 'volume up', 'set volume to 50'\n"
-                    "  - weather: 'what is the weather'\n"
-                    "  - files: 'create a file named test.txt', 'list files in Downloads'\n"
-                    "  - greetings: 'hello', 'how are you', 'tell me a joke'\n\n"
-                    "Rules:\n"
-                    "1. Output ONLY the corrected command — no explanation, no quotes, no prefix.\n"
-                    "2. If it closely sounds like a known command type, map it (e.g. 'what does the pain' → 'what is the time').\n"
-                    "3. If you genuinely cannot determine intent, return the input unchanged."
-                ),
-            },
+            {"role": "system", "content": system_content},
             {"role": "user", "content": raw_text},
         ]
 
         self._rephrase_worker = AIWorker(correction_provider, messages, max_tokens=40)
         self._rephrase_worker.response_ready.connect(
-            lambda corrected: self._on_correction_done(raw_text, corrected)
+            lambda corrected: self._on_correction_done(raw_text, corrected, context)
         )
         self._rephrase_worker.error_occurred.connect(
             lambda err: self._on_correction_failed(raw_text, err)
         )
         self._rephrase_worker.start()
 
-    def _on_correction_done(self, original: str, corrected: str):
+    def _on_correction_done(self, original: str, corrected: str, context: str | None = None):
+        # Strip quotes, newlines, and any AI explanation garbage
         corrected = corrected.strip().strip('"').strip("'")
+        # Remove anything after a newline (AI sometimes adds notes like "(Note: ...)")
+        corrected = corrected.split("\n")[0].strip()
+        # Remove parenthetical notes at the end
+        if "(" in corrected and corrected.rstrip().endswith(")"):
+            corrected = corrected[:corrected.rfind("(")].strip()
+        # Remove common AI explanation prefixes
+        for prefix in ("Corrected:", "Output:", "Command:", "Note:"):
+            if corrected.lower().startswith(prefix.lower()):
+                corrected = corrected[len(prefix):].strip()
         logger.info(f"STT correction result: '{original}' → '{corrected}'")
+        # Log every AI correction so user can review in stt_corrections_log.jsonl
+        if corrected.lower() != original.lower():
+            ctx = context if context else "general"
+            self._log_general_correction(original, corrected, source="ai", context=ctx)
         self.speech_corrected.emit(original, corrected)
 
     def _on_correction_failed(self, original: str, error: str):
         logger.warning(f"STT correction failed ({error}), using raw: '{original}'")
         self.speech_corrected.emit(original, original)
+
+    def _log_general_correction(self, raw_vosk: str, corrected: str,
+                                  source: str = "ai", context: str = "general") -> None:
+        """Append any correction (AI or cache hit) to stt_corrections_log.jsonl.
+
+        Every correction is logged here regardless of source so you can always
+        see what Jarvis heard and what it mapped it to.
+        To fix a wrong entry:
+          1. Open config/stt_corrections_log.jsonl — find the wrong raw value.
+          2. Open config/stt_corrections.json — fix or add the entry in the right section.
+        """
+        record = {
+            "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "context": context,
+            "raw": raw_vosk,
+            "corrected": corrected,
+            "source": source,
+        }
+        try:
+            self._corrections_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._corrections_log_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                fh.flush()
+        except Exception as e:
+            logger.error(f"Failed to write general correction log: {e}")
 
     def ask(self, user_message: str):
         """Send a message to the AI asynchronously."""

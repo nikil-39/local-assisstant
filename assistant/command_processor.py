@@ -39,6 +39,8 @@ class CommandProcessor(QObject):
         (r"\b(morning\s+)?briefing\b", "briefing"),
         (r"\bgive\s+(me\s+)?(a\s+)?briefing\b", "briefing"),
         (r"\bnewspaper\b", "briefing"),
+        # Web page agent
+        (r"\bvisit\s+(?:a\s+|the\s+)?web[\s\-]*page\b", "open_webpage"),
         # Exit / Quit
         (r"\b(exit|quit|bye|goodbye|shut\s*down|close assistant|stop assistant)\b", "exit"),
         # Help
@@ -200,6 +202,9 @@ class CommandProcessor(QObject):
 
         elif action == "briefing":
             return CommandResult("briefing", "Preparing your morning briefing...", data={"agent": "briefing"})
+
+        elif action == "open_webpage":
+            return CommandResult("open_webpage", "Opening web page...", data={})
 
         elif action == "screenshot":
             return CommandResult("screenshot", "Taking a screenshot...", data={"action": "screenshot"})

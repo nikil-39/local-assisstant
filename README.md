@@ -49,28 +49,66 @@ With `--debug` you can see this in the logs:
 - **Offline voice recognition** — Vosk STT (no internet needed)
 - **AI speech correction** — local LLM fixes STT errors before action dispatch
 - **Glassmorphism GUI** — animated orb, particle effects, waveform visualizer
-- **80+ app aliases** — fuzzy matching + Start Menu shortcut fallback
+- **80+ app aliases** — fuzzy matching + Start Menu shortcut fallback (mishearings like "themes" → "teams" auto-corrected)
 - **AI integration** — Ollama (local) / Gemini / OpenAI / Claude (optional)
 - **Speech normalization** — handles messy voice input ("could you opened outlook" → opens Outlook)
 - **System control** — volume, screenshots, file ops, process management
+- **Web Page Agent** — opens Jira, Kanban, CI/CD boards, and Bitbucket repos in Firefox with a two-step voice flow
 
 ---
 
 ## Voice Commands
 
-### Applications
+### Applications — Open & Close
 
-| Say              | Action                    |
-| ---------------- | ------------------------- |
-| "Open Chrome"    | Launch Google Chrome      |
-| "Launch Outlook" | Launch Outlook            |
-| "Start VS Code"  | Launch Visual Studio Code |
-| "Run Firefox"    | Launch Mozilla Firefox    |
-| "Close Notepad"  | Kill Notepad process      |
+Use **"Open"**, **"Launch"**, **"Start"**, or **"Run"** to open an app.  
+Use **"Close"**, **"Kill"**, or **"Stop"** to close it.
 
-You can say just the app name (e.g. "Outlook") and it will be opened automatically.
+> Vosk mishearings are auto-corrected by fuzzy matching (e.g. *"open microsoft themes"* → opens **Microsoft Teams**).
 
-**Supported app names:** outlook, word, excel, powerpoint, teams, onenote, chrome, firefox, edge, notepad, calculator, terminal, powershell, cmd, task manager, vs code, visual studio, paint, snipping tool, spotify, zoom, slack, discord, telegram, whatsapp, vpn, sap, keepass, acrobat, file explorer, settings, control panel, and more.
+| Say                         | Say to Close                   | App                        |
+| --------------------------- | ------------------------------ | -------------------------- |
+| "Open Outlook"              | "Close Outlook"                | Microsoft Outlook          |
+| "Open Word"                 | "Close Word"                   | Microsoft Word             |
+| "Open Excel"                | "Close Excel"                  | Microsoft Excel            |
+| "Open PowerPoint"           | "Close PowerPoint"             | Microsoft PowerPoint       |
+| "Open Teams"                | "Close Teams"                  | Microsoft Teams            |
+| "Open OneNote"              | "Close OneNote"                | Microsoft OneNote          |
+| "Open Chrome"               | "Close Chrome"                 | Google Chrome              |
+| "Open Firefox"              | "Close Firefox"                | Mozilla Firefox            |
+| "Open Edge"                 | "Close Edge"                   | Microsoft Edge             |
+| "Open Notepad"              | "Close Notepad"                | Notepad                    |
+| "Open Calculator"           | "Close Calculator"             | Calculator                 |
+| "Open Terminal"             | "Close Terminal"               | Windows Terminal           |
+| "Open PowerShell"           | "Close PowerShell"             | PowerShell                 |
+| "Open Command Prompt"       | "Close Command Prompt"         | CMD                        |
+| "Open VS Code"              | "Close VS Code"                | Visual Studio Code         |
+| "Open Visual Studio"        | "Close Visual Studio"          | Visual Studio              |
+| "Open File Explorer"        | "Close File Explorer"          | Windows Explorer           |
+| "Open Task Manager"         | "Close Task Manager"           | Task Manager               |
+| "Open Settings"             | —                              | Windows Settings           |
+| "Open Control Panel"        | —                              | Control Panel              |
+| "Open Paint"                | "Close Paint"                  | Microsoft Paint            |
+| "Open Snipping Tool"        | "Close Snipping Tool"          | Snipping Tool              |
+| "Open Sticky Notes"         | —                              | Sticky Notes               |
+| "Open Spotify"              | "Close Spotify"                | Spotify                    |
+| "Open Zoom"                 | "Close Zoom"                   | Zoom                       |
+| "Open Slack"                | "Close Slack"                  | Slack                      |
+| "Open Discord"              | "Close Discord"                | Discord                    |
+| "Open Telegram"             | "Close Telegram"               | Telegram                   |
+| "Open WhatsApp"             | —                              | WhatsApp                   |
+| "Open VPN"                  | "Close VPN"                    | Cisco Secure Client        |
+| "Open Citrix"               | "Close Citrix"                 | Citrix Workspace           |
+| "Open SAP"                  | "Close SAP"                    | SAP GUI / SAP Logon        |
+| "Open KeePass"              | "Close KeePass"                | KeePass                    |
+| "Open Screenpresso"         | "Close Screenpresso"           | Screenpresso               |
+| "Open Acrobat"              | "Close Acrobat"                | Adobe Acrobat Reader       |
+| "Open Git Bash"             | —                              | Git Bash                   |
+| "Open SourceTree"           | —                              | SourceTree                 |
+| "Open Beyond Compare"       | —                              | Beyond Compare             |
+| "Open Media Player"         | "Close Media Player"           | Windows Media Player       |
+| "Open Camera"               | —                              | Windows Camera             |
+| "Open Store"                | —                              | Microsoft Store            |
 
 ### Web Search
 
@@ -297,3 +335,40 @@ JIRA_USER=your-username
 ```
 
 You can also adjust the Jira JQL query in `config/settings.json` under `agents.briefing.jira_jql`.
+
+---
+
+### Web Page Agent
+
+> *"Open webpage"* → Jarvis asks *"Which page?"* → speak the page name
+
+**Two-step flow:**
+1. Say **"open webpage"** — Jarvis responds with *"Which page? Say Jira, Kanban board, CI CD board, or a repo name in Bitbucket."*
+2. Say one of the commands below — Jarvis opens it in **Mozilla Firefox**.
+
+#### Predefined pages
+
+| Say (after "open webpage") | Opens                                          |
+| -------------------------- | ---------------------------------------------- |
+| "Jira"                     | Jira project dashboard                         |
+| "Kanban board"             | Scrum / Kanban sprint board                    |
+| "CI CD board"              | CI/CD pipeline board                           |
+
+#### Bitbucket repositories
+
+Say **"[repo name] in Bitbucket"** or **"[repo name] repo"** after the trigger.
+
+- Spoken repo names are automatically converted to kebab-case:  
+  *"cx data visualization"* → `cx-data-visualization`
+- Repos are matched against your local `C:\Git` folder (fuzzy match supported).
+- Unknown repos default to the `ASIOS` project. Known pipeline repos use `ASMPAPP`.
+
+| Say (after "open webpage")                | Opens                                                         |
+| ----------------------------------------- | ------------------------------------------------------------- |
+| "pipelines in bitbucket"                  | `ASMPAPP/repos/pipelines/browse`                              |
+| "cx data visualization in bitbucket"      | `ASIOS/repos/cx-data-visualization/browse`                    |
+| "pipeline tools in bitbucket"             | `ASMPAPP/repos/pipeline-tools/browse`                         |
+| "[any repo from C:\Git] in bitbucket"     | Matching Bitbucket repo                                       |
+
+To add more repos with non-default projects, edit `REPO_PROJECTS` in  
+`assistant/agents/webpage_agent.py`.

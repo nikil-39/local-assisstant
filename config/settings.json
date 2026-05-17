@@ -16,7 +16,7 @@
         "pause_threshold": 2.0
     },
     "ai": {
-        "provider": "ollama",
+        "provider": "openai",
         "ollama_enabled": true,
         "ollama_model": "qwen2.5:32b",
         "ollama_correction_model": "llama3.1:8b",
