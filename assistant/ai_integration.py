@@ -544,7 +544,10 @@ class AIManager(QObject):
                 copilot = CopilotProvider(github_token, model=copilot_model)
                 if copilot.is_available():
                     self.providers.insert(0, copilot)
+                    # Also use Copilot for STT corrections when --copilot is active
+                    self._correction_provider = copilot
                     logger.info(f"GitHub Copilot provider initialized: {copilot_model}")
+                    logger.info(f"STT correction provider switched to Copilot: {copilot_model}")
             else:
                 logger.warning(
                     "--copilot flag active but GITHUB_TOKEN not set. "
@@ -560,15 +563,16 @@ class AIManager(QObject):
                 self.providers.append(ollama)
                 logger.info(f"Ollama provider initialized: {ollama_model}")
 
-            # Separate fast model for STT correction
+            # Separate fast model for STT correction (only if not already set by --copilot)
             correction_model = self.settings.get("ollama_correction_model", "llama3.1:8b")
-            if correction_model != ollama_model:
-                correction_ollama = OllamaProvider(model=correction_model, base_url=ollama_url)
-                if correction_ollama.is_available():
-                    self._correction_provider = correction_ollama
-                    logger.info(f"STT correction provider: {correction_model}")
-            if self._correction_provider is None and ollama.is_available():
-                self._correction_provider = ollama
+            if self._correction_provider is None:
+                if correction_model != ollama_model:
+                    correction_ollama = OllamaProvider(model=correction_model, base_url=ollama_url)
+                    if correction_ollama.is_available():
+                        self._correction_provider = correction_ollama
+                        logger.info(f"STT correction provider: {correction_model}")
+                if self._correction_provider is None and ollama.is_available():
+                    self._correction_provider = ollama
 
         # ── OpenAI ──────────────────────────────────────────────────────
         openai_key = os.getenv("OPENAI_API_KEY", "") or self.settings.get("openai_api_key", "")
@@ -609,9 +613,11 @@ class AIManager(QObject):
     _PASSTHROUGH_PATTERNS = re.compile(
         r"\b("
         r"briefing|newspaper|morning briefing|give briefing"
+        r"|thanos"
         r"|visit\s+web\s*page"
+        r"|maturity\s+level|cx\s+efficiency|machine\s+learning|data\s+collection"
         r"|open\s+\w+|launch\s+\w+|start\s+\w+|close\s+\w+"
-        r"|search\s+|google\s+"
+        r"|search\b|google\b"
         r"|screenshot|take a screenshot"
         r"|volume\s+(up|down|mute|\d+)|set volume|mute|unmute"
         r"|what time|what date|what day|what is the time"
@@ -782,6 +788,12 @@ class AIManager(QObject):
         """
         # When a specific context is active we ALWAYS attempt correction because
         # the garbled text may accidentally match an unrelated passthrough pattern.
+        # Exception: voice_search context — platform names are simple, passthrough directly.
+        if context == "voice_search":
+            logger.info(f"voice_search context — passing through unchanged: '{raw_text}'")
+            self.speech_corrected.emit(raw_text, raw_text)
+            return
+
         if context is None and self._is_clear_command(raw_text):
             logger.info(f"STT text already matches a command, skipping correction: '{raw_text}'")
             self.speech_corrected.emit(raw_text, raw_text)
@@ -840,10 +852,14 @@ class AIManager(QObject):
                 "The user spoke a page name but the microphone garbled it badly. "
                 "Your job: recover the EXACT page or Bitbucket repository they meant.\n\n"
                 "The user can say:\n"
-                "  - 'jira'                    → Jira dashboard\n"
-                "  - 'kanban board'            → Kanban sprint board\n"
-                "  - 'ci cd board' / 'cicd'   → CI/CD pipeline board\n"
-                "  - '[repo name] in bitbucket' → open that Bitbucket repository\n\n"
+                "  - 'jira'                         → Jira dashboard\n"
+                "  - 'kanban board'                 → Kanban sprint board\n"
+                "  - 'ci cd board' / 'cicd'         → CI/CD pipeline board\n"
+                "  - 'maturity level dashboard'     → Maturity Level Dashboard\n"
+                "  - 'cx efficiency dashboard'      → CX Efficiency Dashboard\n"
+                "  - 'machine learning dashboard'   → Machine Learning Dashboard\n"
+                "  - 'data collection dashboard'    → Data Collection Dashboard\n"
+                "  - '[repo name] in bitbucket'     → open that Bitbucket repository\n\n"
                 f"ALL known repositories (folder name and URL slug): {_repos}\n\n"
                 "Phonetic garbling examples (STT output → true intent):\n"
                 "  'biplanes in be bigot'          → 'pipelines in bitbucket'\n"
@@ -854,7 +870,11 @@ class AIManager(QObject):
                 "  'see ex data' / 'cx data'       → 'cx data visualization in bitbucket'\n"
                 "  'main path in bitbucket'        → 'mainpath-accelerator in bitbucket'\n"
                 "  'canada board'                  → 'kanban board'\n"
-                "  'see i cd board'                → 'ci cd board'\n\n"
+                "  'see i cd board'                → 'ci cd board'\n"
+                "  'cx efficiency' / 'cx efficient dashboard' → 'cx efficiency dashboard'\n"
+                "  'maturity' / 'maturity level'   → 'maturity level dashboard'\n"
+                "  'machine learning' / 'ml dash'  → 'machine learning dashboard'\n"
+                "  'data collection' / 'data dash' → 'data collection dashboard'\n\n"
                 "Rules:\n"
                 "1. Output ONLY the corrected phrase — no explanation, no quotes.\n"
                 "2. Keep 'in bitbucket' at the end when the user means a repo.\n"

@@ -270,6 +270,7 @@ class JarvisMainWindow(QMainWindow):
         self._state = AssistantState.IDLE
         self._chat_visible = False
         self._pending_context: str | None = None  # e.g. "webpage" after "open webpage"
+        self._listen_after_speak = False  # auto-start listening when TTS finishes
         # Stores (raw_vosk, ai_corrected, source) until agent confirms success/failure
         self._pending_webpage_correction: tuple[str, str, str] | None = None
 
@@ -728,6 +729,13 @@ class JarvisMainWindow(QMainWindow):
             self._handle_command_result(result)
             return
 
+        if self._pending_context == "voice_search":
+            self._pending_context = None
+            from assistant.command_processor import CommandResult
+            result = CommandResult("voice_search", "Searching...", data={"query": text})
+            self._handle_command_result(result)
+            return
+
         # Normal routing
         result = self.command_processor.process(text)
         self._handle_command_result(result)
@@ -736,8 +744,19 @@ class JarvisMainWindow(QMainWindow):
         self._set_state(AssistantState.SPEAKING)
 
     def _on_speech_finished(self):
+        if self._listen_after_speak:
+            self._listen_after_speak = False
+            # Small delay to let audio subsystem settle after TTS output
+            QTimer.singleShot(300, self._start_listening_for_context)
+            return
         self._set_state(AssistantState.IDLE)
         self._set_status("Ready")
+
+    def _start_listening_for_context(self):
+        """Start listening immediately (used after prompt TTS finishes)."""
+        if not self.voice_handler.is_listening:
+            self._set_state(AssistantState.LISTENING)
+            self.voice_handler.start_listening()
 
     def _on_audio_level(self, level: float):
         self.orb.set_audio_level(level)
@@ -759,9 +778,8 @@ class JarvisMainWindow(QMainWindow):
     def _on_agent_status(self, text: str):
         """Spoken status update emitted by a running agent (e.g. briefing progress)."""
         self._set_status(text)
-        # Speak only if not already speaking so we don't cut off previous TTS.
-        if not self.voice_handler.is_speaking:
-            self.voice_handler.speak(text)
+        # Always queue — VoiceHandler will speak in order without dropping.
+        self.voice_handler.speak(text)
 
     def _on_agent_finished(self, agent_name: str, summary: str):
         """Called when a background agent finishes successfully."""
@@ -785,15 +803,25 @@ class JarvisMainWindow(QMainWindow):
 
     def _on_webpage_prompt_ready(self, agent_name: str, prompt: str):
         """First step of 'open webpage': speak the prompt then listen for the page name."""
-        self._add_chat_message(prompt, is_user=False)
-        self.response_label.setText(prompt[:150] + ("..." if len(prompt) > 150 else ""))
+        # Show detailed description in chat, but speak only the short prompt
+        from assistant.agents.webpage_agent import HELP_DESCRIPTION
+        self._add_chat_message(HELP_DESCRIPTION, is_user=False)
+        self.response_label.setText(prompt)
         self._pending_context = "webpage"
         self._set_status("Waiting for page name — speak now...")
-        # Speak the prompt; when TTS finishes, _on_speech_finished will idle.
-        # We auto-start listening after speaking.
+        # Auto-start listening once TTS finishes the prompt
+        self._listen_after_speak = True
         self.voice_handler.speak(prompt)
-        # Start listening after a short delay to let TTS finish
-        QTimer.singleShot(3500, self._toggle_listening)
+
+    def _on_search_prompt_ready(self, agent_name: str, prompt: str):
+        """First step of 'voice search': speak prompt then listen for platform."""
+        self._add_chat_message(prompt, is_user=False)
+        self.response_label.setText(prompt[:150] + ("..." if len(prompt) > 150 else ""))
+        self._pending_context = "voice_search"
+        self._set_status("Waiting for platform — speak now...")
+        # Auto-start listening once TTS finishes the prompt
+        self._listen_after_speak = True
+        self.voice_handler.speak(prompt)
 
     def _on_agent_error(self, agent_name: str, error: str):
         """Called when a background agent fails."""
@@ -833,6 +861,16 @@ class JarvisMainWindow(QMainWindow):
                 self._set_status("Waiting for page name...")
                 self._agent_worker = AgentWorker(agent, {})
                 self._agent_worker.finished.connect(self._on_webpage_prompt_ready)
+                self._agent_worker.error.connect(self._on_agent_error)
+                self._agent_worker.start()
+                return
+
+            # ── Two-step "voice_search" flow ──────────────────────────────────
+            if result.action == "voice_search" and not result.data.get("query"):
+                self._set_status("Waiting for search platform...")
+                self._pending_context = "voice_search"
+                self._agent_worker = AgentWorker(agent, {})
+                self._agent_worker.finished.connect(self._on_search_prompt_ready)
                 self._agent_worker.error.connect(self._on_agent_error)
                 self._agent_worker.start()
                 return

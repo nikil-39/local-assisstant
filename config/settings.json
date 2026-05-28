@@ -9,7 +9,7 @@
         "tts_engine": "pyttsx3",
         "tts_rate": 175,
         "tts_volume": 0.9,
-        "stt_engine": "whisper",
+        "stt_engine": "vosk",
         "whisper_model": "medium",
         "listen_timeout": 10,
         "phrase_time_limit": 15,
@@ -27,7 +27,8 @@
         "openai_base_url": "https://api.openai.com/v1",
         "max_tokens": 500,
         "temperature": 0.7,
-        "system_prompt": "You are Jarvis, a helpful and witty AI desktop assistant. Keep responses concise and actionable. When the user asks you to perform system tasks, describe what you're doing briefly."
+        "system_prompt": "You are Jarvis, a helpful and witty AI desktop assistant. Keep responses concise and actionable. When the user asks you to perform system tasks, describe what you're doing briefly.",
+        "use_copilot": true
     },
     "ui": {
         "window_width": 600,

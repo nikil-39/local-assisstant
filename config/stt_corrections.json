@@ -7,7 +7,12 @@
     "jai rao  jai rao": "jira",
     "asmp-dev-in-bitpaket": "asmp-dev in bitbucket",
     "asmp-dev-input bucket": "asmp-dev in bitbucket",
-    "jai ram": "Jira"
+    "jai ram": "Jira",
+    "cx-efficiency-tashboard": "cx efficiency dashboard",
+    "cx efficiency.": "cx efficiency dashboard",
+    "cx efficiency dashboard.": "cx efficiency dashboard",
+    "cacd dashboard": "CI/CD pipeline board",
+    "planes repo in bitbucket": "pipelines in bitbucket"
   },
   "apps": {
     "_readme": "Open/close app corrections. Key = garbled app name Vosk heard. Value = correct app name from commands.json aliases."

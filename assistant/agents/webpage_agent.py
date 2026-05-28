@@ -35,6 +35,17 @@ PAGES: dict[str, str] = {
     "ci/cd board": "https://rb-tracker.bosch.com/tracker07/secure/RapidBoard.jspa?rapidView=23841&selectedIssue=ACCEL-2714#",
     "ci/cd": "https://rb-tracker.bosch.com/tracker07/secure/RapidBoard.jspa?rapidView=23841&selectedIssue=ACCEL-2714#",
     "cicd": "https://rb-tracker.bosch.com/tracker07/secure/RapidBoard.jspa?rapidView=23841&selectedIssue=ACCEL-2714#",
+    # Dashboards
+    "maturity level dashboard": "https://ci-cd-data-visualization.observe.app.bosch.com/d/femizm2r8xs00c/maturity-level-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-project=$__all&refresh=15m",
+    "maturity level": "https://ci-cd-data-visualization.observe.app.bosch.com/d/femizm2r8xs00c/maturity-level-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-project=$__all&refresh=15m",
+    "maturity dashboard": "https://ci-cd-data-visualization.observe.app.bosch.com/d/femizm2r8xs00c/maturity-level-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-project=$__all&refresh=15m",
+    "cx efficiency dashboard": "https://ci-cd-data-visualization.observe.app.bosch.com/d/b4f56b9e-f1df-4df6-887a-50e5def1cbbd/cx-efficiency-dashboard?orgId=1&from=now-30d&to=now&timezone=browser&var-project=",
+    "cx efficiency": "https://ci-cd-data-visualization.observe.app.bosch.com/d/b4f56b9e-f1df-4df6-887a-50e5def1cbbd/cx-efficiency-dashboard?orgId=1&from=now-30d&to=now&timezone=browser&var-project=",
+    "machine learning dashboard": "https://ci-cd-data-visualization.observe.app.bosch.com/d/9657e546-527a-4fe3-a3ee-8809d2b74918/machine-learning-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-pipeline_name=combined_ffb_integ",
+    "machine learning": "https://ci-cd-data-visualization.observe.app.bosch.com/d/9657e546-527a-4fe3-a3ee-8809d2b74918/machine-learning-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-pipeline_name=combined_ffb_integ",
+    "ml dashboard": "https://ci-cd-data-visualization.observe.app.bosch.com/d/9657e546-527a-4fe3-a3ee-8809d2b74918/machine-learning-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-pipeline_name=combined_ffb_integ",
+    "data collection dashboard": "https://ci-cd-data-visualization.observe.app.bosch.com/d/deidfl5oc62v4f/asmpapp-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-pipelne_name=ASMPAPP%2FProductive_Pipelines%2Fasmp-dev_PushPullRequestChecks%2F&var-build_type=pr_check",
+    "data collection": "https://ci-cd-data-visualization.observe.app.bosch.com/d/deidfl5oc62v4f/asmpapp-dashboard?orgId=1&from=now-24h&to=now&timezone=browser&var-pipelne_name=ASMPAPP%2FProductive_Pipelines%2Fasmp-dev_PushPullRequestChecks%2F&var-build_type=pr_check",
 }
 
 # ── Bitbucket ────────────────────────────────────────────────────────────────
@@ -59,10 +70,13 @@ _BITBUCKET_LIKE = re.compile(
 )
 
 # Prompt shown to user when no sub-command is given yet
-HELP_PROMPT = (
-    "Which page would you like to open? "
-    "Say Jira, Kanban board, CI CD board, "
-    "or say a repo name followed by in Bitbucket."
+# Voice says short form; description shown in chat bubble only
+HELP_PROMPT = "Which one Nik?"
+HELP_DESCRIPTION = (
+    "Say: Jira, Kanban board, CI CD board, "
+    "Maturity Level Dashboard, CX Efficiency Dashboard, "
+    "Machine Learning Dashboard, Data Collection Dashboard, "
+    "or a repo name."
 )
 
 

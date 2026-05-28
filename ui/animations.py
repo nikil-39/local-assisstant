@@ -312,7 +312,7 @@ class OrbWidget(QWidget):
         if self._state == AssistantState.PROCESSING:
             self._ring_rotation += 3.0
         elif self._state == AssistantState.LISTENING:
-            self._ring_rotation += 1.0
+            self._ring_rotation += 1.5
         else:
             self._ring_rotation += 0.3
 
@@ -337,8 +337,14 @@ class OrbWidget(QWidget):
         cy = self.height() / 2
         r = self._orb_size / 2
 
+        # Draw energy field (outermost layer — subtle pulsing halo)
+        self._draw_energy_field(painter, cx, cy, r)
+
         # Draw concentric rings
         self._draw_rings(painter, cx, cy, r)
+
+        # Draw orbiting data nodes
+        self._draw_orbit_nodes(painter, cx, cy, r)
 
         # Draw outer glow
         self._draw_glow(painter, cx, cy, r)
@@ -354,6 +360,7 @@ class OrbWidget(QWidget):
             self._draw_audio_bars(painter, cx, cy, r)
         elif self._state == AssistantState.PROCESSING:
             self._draw_processing_arc(painter, cx, cy, r)
+            self._draw_electric_arcs(painter, cx, cy, r)
         elif self._state == AssistantState.SPEAKING:
             self._draw_ripple(painter, cx, cy)
 
@@ -553,6 +560,103 @@ class OrbWidget(QWidget):
         painter.drawEllipse(QPointF(cx, dot_y), dot_r, dot_r)
         painter.restore()
 
+    def _draw_energy_field(self, painter: QPainter, cx: float, cy: float, r: float):
+        """Draw a pulsing energy field / halo around the orb."""
+        painter.save()
+        # Multiple concentric pulsing halos at different phases
+        for i in range(3):
+            phase = self._pulse_phase + i * (2 * math.pi / 3)
+            pulse = 0.3 + 0.7 * abs(math.sin(phase * 0.5))
+            halo_r = r * (1.6 + i * 0.15) * self._scale
+            alpha = int(8 * pulse)
+
+            color = QColor(Palette.ACCENT) if i % 2 == 0 else QColor(Palette.SECONDARY)
+            color.setAlpha(alpha)
+            pen = QPen(color)
+            pen.setWidthF(1.0 + pulse)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(cx, cy), halo_r, halo_r)
+        painter.restore()
+
+    def _draw_orbit_nodes(self, painter: QPainter, cx: float, cy: float, r: float):
+        """Draw small glowing data nodes orbiting the orb."""
+        painter.save()
+        node_count = 6
+        orbit_r = r * 1.35 * self._scale
+
+        for i in range(node_count):
+            # Each node orbits at different speed/direction
+            angle = math.radians(self._ring_rotation * (1.2 if i % 2 == 0 else -0.8) + i * (360 / node_count))
+            # Slight vertical wobble
+            wobble = math.sin(self._pulse_phase + i) * 5
+            nx = cx + math.cos(angle) * orbit_r
+            ny = cy + math.sin(angle) * orbit_r + wobble
+
+            # Node glow
+            node_size = 3.0 + 1.5 * abs(math.sin(self._pulse_phase + i * 1.2))
+            glow_grad = QRadialGradient(nx, ny, node_size * 3)
+            glow_color = QColor(Palette.ACCENT) if i % 2 == 0 else QColor(Palette.PRIMARY)
+            glow_color.setAlpha(60)
+            glow_grad.setColorAt(0.0, glow_color)
+            glow_grad.setColorAt(1.0, QColor(0, 0, 0, 0))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(glow_grad))
+            painter.drawEllipse(QPointF(nx, ny), node_size * 3, node_size * 3)
+
+            # Node core
+            core_color = QColor(220, 240, 255, 200)
+            painter.setBrush(QBrush(core_color))
+            painter.drawEllipse(QPointF(nx, ny), node_size, node_size)
+
+            # Trail line connecting to orb center (faint)
+            trail_color = QColor(Palette.ACCENT)
+            trail_color.setAlpha(15)
+            pen = QPen(trail_color)
+            pen.setWidthF(0.5)
+            painter.setPen(pen)
+            painter.drawLine(QPointF(cx, cy), QPointF(nx, ny))
+
+        painter.restore()
+
+    def _draw_electric_arcs(self, painter: QPainter, cx: float, cy: float, r: float):
+        """Draw crackling electric arcs during processing (randomized each frame)."""
+        painter.save()
+        orb_r = r * self._scale
+        arc_count = 3
+
+        for _ in range(arc_count):
+            # Random start angle on the orb edge
+            start_angle = random.uniform(0, 2 * math.pi)
+            sx = cx + math.cos(start_angle) * orb_r
+            sy = cy + math.sin(start_angle) * orb_r
+
+            # End point further out
+            end_dist = orb_r + random.uniform(15, 40)
+            end_angle = start_angle + random.uniform(-0.4, 0.4)
+            ex = cx + math.cos(end_angle) * end_dist
+            ey = cy + math.sin(end_angle) * end_dist
+
+            # Draw jagged line (2-3 segments)
+            path = QPainterPath()
+            path.moveTo(sx, sy)
+            segments = random.randint(2, 4)
+            for s in range(1, segments):
+                t = s / segments
+                mx = sx + (ex - sx) * t + random.uniform(-8, 8)
+                my = sy + (ey - sy) * t + random.uniform(-8, 8)
+                path.lineTo(mx, my)
+            path.lineTo(ex, ey)
+
+            color = QColor(120, 200, 255, random.randint(100, 200))
+            pen = QPen(color)
+            pen.setWidthF(random.uniform(1.0, 2.0))
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(path)
+
+        painter.restore()
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Waveform Visualization Widget
@@ -648,7 +752,7 @@ class WaveformWidget(QWidget):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class GlassBackground(QWidget):
-    """Full-window background with glassmorphism effect and particles."""
+    """Full-window background with holographic glassmorphism effect and particles."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -656,13 +760,39 @@ class GlassBackground(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(33)
+        self._frame = 0  # frame counter for animated effects
+        # Data rain columns (matrix-style falling characters)
+        self._rain_columns: list[dict] = []
+        self._init_rain(600)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.particles.resize(self.width(), self.height())
+        self._init_rain(self.width())
+
+    def _init_rain(self, width: int):
+        """Initialize data rain columns across the width."""
+        col_spacing = 25
+        self._rain_columns = []
+        for x in range(0, width, col_spacing):
+            self._rain_columns.append({
+                "x": x,
+                "y": random.uniform(-200, 0),
+                "speed": random.uniform(1.5, 4.0),
+                "chars": [chr(random.randint(0x30A0, 0x30FF)) for _ in range(random.randint(5, 15))],
+                "alpha_base": random.uniform(0.03, 0.08),
+            })
 
     def _tick(self):
+        self._frame += 1
         self.particles.update()
+        # Update rain
+        for col in self._rain_columns:
+            col["y"] += col["speed"]
+            if col["y"] > self.height() + 200:
+                col["y"] = random.uniform(-300, -50)
+                col["speed"] = random.uniform(1.5, 4.0)
+                col["chars"] = [chr(random.randint(0x30A0, 0x30FF)) for _ in range(random.randint(5, 15))]
         self.update()
 
     def paintEvent(self, event):
@@ -674,30 +804,128 @@ class GlassBackground(QWidget):
 
         # Dark gradient background
         bg_gradient = QLinearGradient(0, 0, 0, h)
-        bg_gradient.setColorAt(0.0, QColor(15, 20, 35, 242))
-        bg_gradient.setColorAt(0.5, QColor(17, 24, 39, 245))
-        bg_gradient.setColorAt(1.0, QColor(10, 15, 30, 250))
+        bg_gradient.setColorAt(0.0, QColor(8, 12, 24, 250))
+        bg_gradient.setColorAt(0.5, QColor(12, 18, 32, 252))
+        bg_gradient.setColorAt(1.0, QColor(6, 10, 20, 255))
         painter.fillRect(0, 0, w, h, QBrush(bg_gradient))
+
+        # Holographic shimmer overlay (animated diagonal sweep)
+        self._draw_hologram_shimmer(painter, w, h)
 
         # Subtle gradient overlay (top-left indigo glow)
         overlay = QRadialGradient(w * 0.3, h * 0.2, w * 0.6)
-        overlay.setColorAt(0.0, QColor(99, 102, 241, 20))
+        overlay.setColorAt(0.0, QColor(99, 102, 241, 25))
         overlay.setColorAt(1.0, QColor(0, 0, 0, 0))
         painter.fillRect(0, 0, w, h, QBrush(overlay))
 
         # Bottom-right cyan glow
         overlay2 = QRadialGradient(w * 0.7, h * 0.8, w * 0.5)
-        overlay2.setColorAt(0.0, QColor(6, 182, 212, 12))
+        overlay2.setColorAt(0.0, QColor(6, 182, 212, 15))
         overlay2.setColorAt(1.0, QColor(0, 0, 0, 0))
         painter.fillRect(0, 0, w, h, QBrush(overlay2))
+
+        # Hex grid pattern (hologram texture)
+        self._draw_hex_grid(painter, w, h)
 
         # Draw particles
         self.particles.draw(painter)
 
+        # Data rain (faint matrix-style falling characters)
+        self._draw_data_rain(painter, w, h)
+
+        # Circuit traces (animated light pulses along paths)
+        self._draw_circuit_traces(painter, w, h)
+
         # Glass card (inner panel)
         self._draw_glass_card(painter, w, h)
 
+        # Scanline overlay (CRT/hologram feel)
+        self._draw_scanlines(painter, w, h)
+
+        # Edge glow (flickering border)
+        self._draw_edge_glow(painter, w, h)
+
         painter.end()
+
+    def _draw_hologram_shimmer(self, painter: QPainter, w: float, h: float):
+        """Animated diagonal light sweep like a holographic card."""
+        painter.save()
+        # Sweep position oscillates across the window
+        sweep_x = (self._frame * 2) % (w + 200) - 100
+        shimmer_grad = QLinearGradient(sweep_x - 60, 0, sweep_x + 60, h)
+        shimmer_grad.setColorAt(0.0, QColor(0, 0, 0, 0))
+        shimmer_grad.setColorAt(0.4, QColor(99, 220, 255, 8))
+        shimmer_grad.setColorAt(0.5, QColor(180, 140, 255, 12))
+        shimmer_grad.setColorAt(0.6, QColor(99, 220, 255, 8))
+        shimmer_grad.setColorAt(1.0, QColor(0, 0, 0, 0))
+        painter.fillRect(0, 0, int(w), int(h), QBrush(shimmer_grad))
+        painter.restore()
+
+    def _draw_hex_grid(self, painter: QPainter, w: float, h: float):
+        """Draw a subtle hexagonal grid pattern."""
+        painter.save()
+        hex_size = 30
+        color = QColor(99, 102, 241, 8)
+        pen = QPen(color)
+        pen.setWidthF(0.5)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        row_h = hex_size * 1.732
+        for row in range(int(h / row_h) + 2):
+            for col in range(int(w / (hex_size * 3)) + 2):
+                cx = col * hex_size * 3 + (hex_size * 1.5 if row % 2 else 0)
+                cy = row * row_h * 0.5
+                path = QPainterPath()
+                for i in range(6):
+                    angle = math.radians(60 * i - 30)
+                    px = cx + hex_size * 0.5 * math.cos(angle)
+                    py = cy + hex_size * 0.5 * math.sin(angle)
+                    if i == 0:
+                        path.moveTo(px, py)
+                    else:
+                        path.lineTo(px, py)
+                path.closeSubpath()
+                painter.drawPath(path)
+        painter.restore()
+
+    def _draw_scanlines(self, painter: QPainter, w: float, h: float):
+        """Subtle horizontal scanlines for holographic CRT feel."""
+        painter.save()
+        # Only draw every 3rd pixel row for performance
+        color = QColor(0, 0, 0, 12)
+        pen = QPen(color)
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        for y in range(0, int(h), 3):
+            painter.drawLine(0, y, int(w), y)
+        painter.restore()
+
+    def _draw_edge_glow(self, painter: QPainter, w: float, h: float):
+        """Animated flickering glow along the window edges."""
+        painter.save()
+        # Flicker intensity based on frame
+        flicker = 0.5 + 0.5 * math.sin(self._frame * 0.1)
+        alpha = int(20 + 15 * flicker)
+
+        margin = 15
+        rect = QRectF(margin, margin, w - 2 * margin, h - 2 * margin)
+        radius = 20.0
+
+        # Cyan edge glow
+        glow_pen = QPen(QColor(6, 182, 212, alpha))
+        glow_pen.setWidthF(1.5)
+        painter.setPen(glow_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, radius, radius)
+
+        # Inner subtle indigo glow
+        inner_rect = QRectF(margin + 2, margin + 2, w - 2 * margin - 4, h - 2 * margin - 4)
+        glow_pen2 = QPen(QColor(99, 102, 241, int(alpha * 0.5)))
+        glow_pen2.setWidthF(0.8)
+        painter.setPen(glow_pen2)
+        painter.drawRoundedRect(inner_rect, radius - 1, radius - 1)
+        painter.restore()
 
     def _draw_glass_card(self, painter: QPainter, w: float, h: float):
         """Draw the main glassmorphism container card."""
@@ -730,3 +958,107 @@ class GlassBackground(QWidget):
             QPointF(margin + radius, margin),
             QPointF(w - margin - radius, margin),
         )
+
+    def _draw_data_rain(self, painter: QPainter, w: float, h: float):
+        """Draw faint matrix-style falling characters in the background."""
+        painter.save()
+        font = QFont("Consolas", 9)
+        painter.setFont(font)
+
+        for col in self._rain_columns:
+            x = col["x"]
+            base_y = col["y"]
+            chars = col["chars"]
+            alpha_base = col["alpha_base"]
+
+            for i, ch in enumerate(chars):
+                cy = base_y + i * 14
+                if cy < -14 or cy > h + 14:
+                    continue
+                # Head character is brightest, tail fades
+                fade = 1.0 - (i / len(chars))
+                alpha = alpha_base * fade
+                if i == 0:
+                    # Leading character glows brighter (cyan)
+                    color = QColor(100, 240, 255, int(alpha * 255 * 3))
+                else:
+                    color = QColor(99, 102, 241, int(alpha * 255))
+                painter.setPen(color)
+                painter.drawText(QPointF(x, cy), ch)
+
+        painter.restore()
+
+    def _draw_circuit_traces(self, painter: QPainter, w: float, h: float):
+        """Draw animated circuit-board traces with light pulses travelling along them."""
+        painter.save()
+        # Define a few static circuit paths (relative to window size)
+        traces = [
+            # (start_x_frac, start_y_frac, segments as list of (dx_frac, dy_frac))
+            (0.05, 0.3, [(0.1, 0), (0, 0.08), (0.08, 0), (0, -0.05)]),
+            (0.85, 0.2, [(-0.08, 0), (0, 0.1), (-0.06, 0), (0, 0.06)]),
+            (0.1, 0.75, [(0.12, 0), (0, -0.06), (0.05, 0), (0, 0.08), (0.07, 0)]),
+            (0.75, 0.85, [(-0.1, 0), (0, -0.08), (-0.05, 0)]),
+            (0.5, 0.05, [(0.08, 0), (0, 0.06), (0.06, 0), (0, 0.04)]),
+        ]
+
+        for idx, (sx_f, sy_f, segs) in enumerate(traces):
+            # Build absolute path points
+            points = [(sx_f * w, sy_f * h)]
+            for dx_f, dy_f in segs:
+                prev = points[-1]
+                points.append((prev[0] + dx_f * w, prev[1] + dy_f * h))
+
+            # Draw static trace line (very faint)
+            trace_color = QColor(99, 102, 241, 12)
+            pen = QPen(trace_color)
+            pen.setWidthF(1.0)
+            painter.setPen(pen)
+            for i in range(len(points) - 1):
+                painter.drawLine(QPointF(*points[i]), QPointF(*points[i + 1]))
+
+            # Draw node dots at corners
+            node_color = QColor(6, 182, 212, 20)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(node_color))
+            for pt in points:
+                painter.drawEllipse(QPointF(*pt), 2, 2)
+
+            # Animated pulse travelling along the trace
+            # Each trace has its own phase offset
+            total_length = sum(
+                math.hypot(points[i+1][0] - points[i][0], points[i+1][1] - points[i][1])
+                for i in range(len(points) - 1)
+            )
+            if total_length == 0:
+                continue
+
+            # Pulse position cycles along total length
+            speed = 2.0 + idx * 0.3
+            pulse_pos = (self._frame * speed + idx * 80) % total_length
+
+            # Find which segment the pulse is on
+            accumulated = 0.0
+            px, py = points[0]
+            for i in range(len(points) - 1):
+                seg_len = math.hypot(points[i+1][0] - points[i][0], points[i+1][1] - points[i][1])
+                if accumulated + seg_len >= pulse_pos:
+                    t = (pulse_pos - accumulated) / seg_len if seg_len > 0 else 0
+                    px = points[i][0] + (points[i+1][0] - points[i][0]) * t
+                    py = points[i][1] + (points[i+1][1] - points[i][1]) * t
+                    break
+                accumulated += seg_len
+
+            # Draw pulse glow
+            pulse_grad = QRadialGradient(px, py, 12)
+            pulse_grad.setColorAt(0.0, QColor(6, 220, 255, 80))
+            pulse_grad.setColorAt(0.5, QColor(99, 102, 241, 30))
+            pulse_grad.setColorAt(1.0, QColor(0, 0, 0, 0))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(pulse_grad))
+            painter.drawEllipse(QPointF(px, py), 12, 12)
+
+            # Bright core
+            painter.setBrush(QBrush(QColor(200, 240, 255, 150)))
+            painter.drawEllipse(QPointF(px, py), 2.5, 2.5)
+
+        painter.restore()

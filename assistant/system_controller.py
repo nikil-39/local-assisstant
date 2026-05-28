@@ -146,6 +146,7 @@ class SystemController:
         "Telegram": "Telegram",
         "taskmgr": "Taskmgr",
         "outlook": "outlook",
+        "microsoft.windows.camera:": "WindowsCamera",
     }
 
     def close_app(self, app_name: str) -> str:

@@ -661,6 +661,7 @@ class VoiceHandler(QObject):
         self._continuous_listener = None
         self._is_listening = False
         self._is_speaking = False
+        self._speak_queue: list[str] = []  # queue for speak() calls while TTS is busy
 
     @property
     def is_listening(self) -> bool:
@@ -747,8 +748,10 @@ class VoiceHandler(QObject):
         self.listening_stopped.emit()
 
     def speak(self, text: str):
-        """Speak the given text."""
+        """Speak the given text. Queues the text if TTS is already running."""
         if self._is_speaking:
+            self._speak_queue.append(text)
+            logger.debug(f"VoiceHandler: TTS busy, queued: {text[:60]}")
             return
 
         self._is_speaking = True
@@ -799,7 +802,13 @@ class VoiceHandler(QObject):
 
     def _on_speech_finished(self):
         self._is_speaking = False
-        self.speech_finished.emit()
+        if self._speak_queue:
+            # Play next queued item (speak() will set _is_speaking = True again)
+            next_text = self._speak_queue.pop(0)
+            logger.debug(f"VoiceHandler: speaking queued text: {next_text[:60]}")
+            self.speak(next_text)
+        else:
+            self.speech_finished.emit()
 
     def _on_tts_error(self, error: str):
         self._is_speaking = False

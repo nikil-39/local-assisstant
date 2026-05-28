@@ -39,8 +39,12 @@ class CommandProcessor(QObject):
         (r"\b(morning\s+)?briefing\b", "briefing"),
         (r"\bgive\s+(me\s+)?(a\s+)?briefing\b", "briefing"),
         (r"\bnewspaper\b", "briefing"),
+        # Thanos agent (close all apps)
+        (r"\bthanos\b", "thanos"),
         # Web page agent
         (r"\bvisit\s+(?:a\s+|the\s+)?web[\s\-]*page\b", "open_webpage"),
+        # Voice search agent
+        (r"\b(?:voice\s+)?search\b(?!\s+(for|on)\b)", "voice_search"),
         # Exit / Quit
         (r"\b(exit|quit|bye|goodbye|shut\s*down|close assistant|stop assistant)\b", "exit"),
         # Help
@@ -203,8 +207,14 @@ class CommandProcessor(QObject):
         elif action == "briefing":
             return CommandResult("briefing", "Preparing your morning briefing...", data={"agent": "briefing"})
 
+        elif action == "thanos":
+            return CommandResult("thanos", "Thanos is coming...", data={"agent": "thanos"})
+
         elif action == "open_webpage":
             return CommandResult("open_webpage", "Opening web page...", data={})
+
+        elif action == "voice_search":
+            return CommandResult("voice_search", "Opening voice search...", data={})
 
         elif action == "screenshot":
             return CommandResult("screenshot", "Taking a screenshot...", data={"action": "screenshot"})
