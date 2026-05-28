@@ -756,6 +756,13 @@ class JarvisMainWindow(QMainWindow):
         self.response_label.setText(text[:150] + ("..." if len(text) > 150 else ""))
         self.voice_handler.speak(text)
 
+    def _on_agent_status(self, text: str):
+        """Spoken status update emitted by a running agent (e.g. briefing progress)."""
+        self._set_status(text)
+        # Speak only if not already speaking so we don't cut off previous TTS.
+        if not self.voice_handler.is_speaking:
+            self.voice_handler.speak(text)
+
     def _on_agent_finished(self, agent_name: str, summary: str):
         """Called when a background agent finishes successfully."""
         self._add_chat_message(summary, is_user=False)
@@ -836,6 +843,7 @@ class JarvisMainWindow(QMainWindow):
             self._agent_worker = AgentWorker(agent, result.data)
             self._agent_worker.finished.connect(self._on_agent_finished)
             self._agent_worker.error.connect(self._on_agent_error)
+            self._agent_worker.status_update.connect(self._on_agent_status)
             self._agent_worker.start()
             return
 

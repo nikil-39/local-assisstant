@@ -31,6 +31,7 @@ class BriefingAgent(BaseAgent):
     def __init__(self, settings: dict, ai_manager=None):
         self.settings = settings
         self.ai_manager = ai_manager
+        self._status_emit: callable | None = None  # set by AgentWorker
         agent_cfg = settings.get("agents", {}).get("briefing", {})
 
         # Jira
@@ -45,6 +46,17 @@ class BriefingAgent(BaseAgent):
         # Output
         self._output_dir = Path(__file__).parent.parent.parent / "output"
         self._output_dir.mkdir(exist_ok=True)
+
+    # ── Status voice updates ─────────────────────────────────────────
+
+    def _speak_status(self, text: str) -> None:
+        """Emit an intermediate spoken status to the main thread (non-blocking)."""
+        logger.info(f"Briefing status: {text}")
+        if self._status_emit is not None:
+            try:
+                self._status_emit(text)
+            except Exception as e:
+                logger.debug(f"Status emit failed: {e}")
 
     # ── Outlook COM ───────────────────────────────────────────────────
 
@@ -503,17 +515,21 @@ class BriefingAgent(BaseAgent):
         logger.info("Morning Briefing Agent starting...")
 
         # 1. Fetch data from Outlook COM (no tokens needed)
+        self._speak_status("Analysing your Outlook emails and calendar.")
         emails = self._fetch_emails()
         calendar = self._fetch_calendar()
         logger.info(f"Outlook COM: {len(emails)} emails, {len(calendar)} meetings")
 
+        self._speak_status("Checking your Jira tickets.")
         tickets = self._fetch_jira_tickets()
         logger.info(f"Jira: {len(tickets)} tickets")
 
         # 2. AI summary
+        self._speak_status("Generating your morning summary.")
         ai_summary = self._ai_summarize(emails, calendar, tickets)
 
         # 3. Generate HTML
+        self._speak_status("Almost done. Opening your briefing now.")
         html_path = self._generate_html(emails, calendar, tickets, ai_summary)
         logger.info(f"Briefing HTML saved: {html_path}")
 

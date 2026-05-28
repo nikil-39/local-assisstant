@@ -83,6 +83,206 @@ class OpenAIProvider(AIProvider):
         return self._available
 
 
+def _ntlm_copilot_request(
+    github_token: str,
+    model: str,
+    payload: dict,
+    proxy_host: str = "rb-proxy-ca1.bosch.com",
+    proxy_port: int = 8080,
+    target_host: str = "models.inference.ai.azure.com",
+    target_port: int = 443,
+    timeout: float = 60.0,
+) -> dict:
+    """Send a chat/completions request through an NTLM CONNECT proxy using SSPI.
+
+    Uses pywin32 SSPI so no password is required — Windows session credentials
+    are used automatically (same as opening a browser through the corporate proxy).
+
+    The NTLM 3-step handshake:
+      1. CONNECT + NTLM Type-1  →  407 + NTLM Type-2 challenge
+      2. (consume full 407 body to stay in sync with the socket)
+      3. CONNECT + NTLM Type-3  →  200 Connection established
+      4. Wrap in TLS and POST the API request
+    """
+    import socket, base64, ssl, json as _json, re
+    try:
+        import sspi
+    except ImportError:
+        raise RuntimeError("pywin32 (sspi) is required for NTLM proxy auth. pip install pywin32")
+
+    def _recv_response(sock):
+        """Read a complete HTTP response: headers + body (via Content-Length)."""
+        raw = b""
+        while b"\r\n\r\n" not in raw:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            raw += chunk
+        header_part, _, body_start = raw.partition(b"\r\n\r\n")
+        # Parse Content-Length so we fully drain the body
+        cl_match = re.search(rb"Content-Length:\s*(\d+)", header_part, re.IGNORECASE)
+        if cl_match:
+            content_length = int(cl_match.group(1))
+            body = body_start
+            while len(body) < content_length:
+                chunk = sock.recv(min(4096, content_length - len(body)))
+                if not chunk:
+                    break
+                body += chunk
+        else:
+            body = body_start
+        return header_part, body
+
+    # ── Open TCP connection to proxy ──────────────────────────────────
+    s = socket.create_connection((proxy_host, proxy_port), timeout=timeout)
+
+    # ── NTLM Type-1 (Negotiate) ───────────────────────────────────────
+    ca = sspi.ClientAuth("NTLM", targetspn=f"HTTP/{proxy_host}")
+    _, out_buf = ca.authorize(None)
+    ntlm1 = base64.b64encode(out_buf[0].Buffer).decode()
+
+    s.sendall((
+        f"CONNECT {target_host}:{target_port} HTTP/1.1\r\n"
+        f"Host: {target_host}:{target_port}\r\n"
+        f"Proxy-Authorization: NTLM {ntlm1}\r\n"
+        f"Proxy-Connection: keep-alive\r\n\r\n"
+    ).encode())
+
+    # ── Read full 407 response (headers + body) ───────────────────────
+    headers407, _ = _recv_response(s)
+
+    ntlm2_b64 = None
+    for line in headers407.split(b"\r\n"):
+        txt = line.decode(errors="ignore")
+        if txt.lower().startswith("proxy-authenticate: ntlm "):
+            ntlm2_b64 = txt.split(" ", 2)[2].strip()
+            break
+    if ntlm2_b64 is None:
+        raise RuntimeError(
+            f"No NTLM challenge in proxy 407 response.\n"
+            f"Headers: {headers407.decode(errors='ignore')}"
+        )
+
+    # ── NTLM Type-3 (Authenticate) ────────────────────────────────────
+    _, out_buf = ca.authorize(base64.b64decode(ntlm2_b64))
+    ntlm3 = base64.b64encode(out_buf[0].Buffer).decode()
+
+    s.sendall((
+        f"CONNECT {target_host}:{target_port} HTTP/1.1\r\n"
+        f"Host: {target_host}:{target_port}\r\n"
+        f"Proxy-Authorization: NTLM {ntlm3}\r\n"
+        f"Proxy-Connection: keep-alive\r\n\r\n"
+    ).encode())
+
+    # ── Read 200 Connection established ──────────────────────────────
+    headers200, _ = _recv_response(s)
+    status_line = headers200.split(b"\r\n")[0].decode(errors="ignore")
+    if b"200" not in headers200.split(b"\r\n")[0]:
+        raise RuntimeError(
+            f"Proxy CONNECT failed: {status_line}\n"
+            f"{headers200.decode(errors='ignore')}"
+        )
+
+    logger.debug(f"Copilot proxy CONNECT: {status_line}")
+
+    # ── Wrap tunnel in TLS ────────────────────────────────────────────
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    tls = ctx.wrap_socket(s, server_hostname=target_host)
+
+    # ── Send HTTP/1.1 POST ────────────────────────────────────────────
+    body = _json.dumps(payload).encode()
+    tls.sendall((
+        f"POST /chat/completions HTTP/1.1\r\n"
+        f"Host: {target_host}\r\n"
+        f"Authorization: Bearer {github_token}\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        f"Connection: close\r\n\r\n"
+    ).encode() + body)
+
+    resp_raw = b""
+    while True:
+        chunk = tls.recv(8192)
+        if not chunk:
+            break
+        resp_raw += chunk
+    tls.close()
+
+    header_end = resp_raw.find(b"\r\n\r\n")
+    return _json.loads(resp_raw[header_end + 4:])
+
+
+class CopilotProvider(AIProvider):
+    """GitHub Copilot via the GitHub Models API (OpenAI-compatible, free tier).
+
+    Requires a GitHub personal access token stored in the GITHUB_TOKEN env var
+    or ``github_token`` in settings.json → ai section.
+
+    On Bosch corporate network: uses pywin32 SSPI for NTLM proxy authentication
+    automatically (no password needed — uses your current Windows session).
+
+    Free-tier model options (as of 2026): gpt-4o-mini, gpt-4o, o3-mini,
+    claude-3-5-sonnet, meta-llama-3.1-8b-instruct, etc.
+    """
+
+    PROXY_HOST = "rb-proxy-ca1.bosch.com"
+    PROXY_PORT = 8080
+    TARGET_HOST = "models.inference.ai.azure.com"
+    TARGET_PORT = 443
+
+    def __init__(self, github_token: str, model: str = "gpt-4o-mini"):
+        self.github_token = github_token
+        self.model = model
+        self._available = False
+        self._init_client()
+
+    def _init_client(self):
+        try:
+            import sspi  # noqa: F401  (validates pywin32 available)
+            self._available = bool(self.github_token)
+            if self._available:
+                logger.info(f"GitHub Copilot provider ready (NTLM proxy): {self.model}")
+        except ImportError:
+            logger.warning(
+                "Copilot provider requires pywin32 (sspi). "
+                "Run: pip install pywin32"
+            )
+            self._available = False
+
+    def chat(self, messages: list[dict], max_tokens: int = 500) -> str | None:
+        if not self._available:
+            return None
+        try:
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+            }
+            data = _ntlm_copilot_request(
+                github_token=self.github_token,
+                model=self.model,
+                payload=payload,
+                proxy_host=self.PROXY_HOST,
+                proxy_port=self.PROXY_PORT,
+                target_host=self.TARGET_HOST,
+                target_port=self.TARGET_PORT,
+                timeout=60.0,
+            )
+            if "choices" in data:
+                return data["choices"][0]["message"]["content"].strip()
+            logger.error(f"Copilot unexpected response: {data}")
+            return None
+        except Exception as e:
+            logger.error(f"Copilot API error: {e}")
+            return None
+
+    def is_available(self) -> bool:
+        return self._available
+
+
 class AnthropicProvider(AIProvider):
     """Anthropic Claude API provider."""
 
@@ -335,6 +535,21 @@ class AIManager(QObject):
 
     def _init_providers(self):
         """Initialize providers in priority order. Ollama first (local), then cloud, then fallback."""
+
+        # ── GitHub Copilot (GitHub Models API) — inserted at top if --copilot ──
+        if self.settings.get("use_copilot", False):
+            github_token = os.getenv("GITHUB_TOKEN", "") or self.settings.get("github_token", "")
+            copilot_model = self.settings.get("copilot_model", "gpt-4o-mini")
+            if github_token:
+                copilot = CopilotProvider(github_token, model=copilot_model)
+                if copilot.is_available():
+                    self.providers.insert(0, copilot)
+                    logger.info(f"GitHub Copilot provider initialized: {copilot_model}")
+            else:
+                logger.warning(
+                    "--copilot flag active but GITHUB_TOKEN not set. "
+                    "Add GITHUB_TOKEN=<your PAT> to your .env file or environment."
+                )
 
         # ── Ollama (local, no API key needed) ───────────────────────────
         if self.settings.get("ollama_enabled", True):
@@ -762,7 +977,8 @@ class AIManager(QObject):
                 result = provider.chat(messages, self.settings.get("max_tokens", 500))
                 if result:
                     self.conversation_history.append({"role": "assistant", "content": result})
-                    logger.info(f"ask_sync answered by {type(provider).__name__}")
+                    model_tag = f" ({provider.model})" if hasattr(provider, "model") else ""
+                    logger.info(f"ask_sync answered by {type(provider).__name__}{model_tag}")
                     return result
                 logger.warning(f"ask_sync: {type(provider).__name__} returned empty, trying next")
         return "I couldn't generate a response. Please try again."

@@ -46,6 +46,7 @@ class AgentWorker(QThread):
 
     finished = pyqtSignal(str, str)  # (agent_name, spoken_summary)
     error = pyqtSignal(str, str)     # (agent_name, error_message)
+    status_update = pyqtSignal(str)  # intermediate spoken status messages
 
     def __init__(self, agent: BaseAgent, data: dict | None = None):
         super().__init__()
@@ -55,6 +56,9 @@ class AgentWorker(QThread):
     def run(self):
         try:
             logger.info(f"Agent '{self.agent.name}' starting...")
+            # Wire status callback if the agent supports it
+            if hasattr(self.agent, '_status_emit'):
+                self.agent._status_emit = self.status_update.emit
             summary = self.agent.run(self.data)
             logger.info(f"Agent '{self.agent.name}' finished.")
             self.finished.emit(self.agent.name, summary or "Done.")

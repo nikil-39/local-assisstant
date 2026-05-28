@@ -74,11 +74,20 @@ def main():
     parser = argparse.ArgumentParser(description="Jarvis Voice Assistant")
     parser.add_argument("--minimized", action="store_true", help="Start minimized to tray")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--copilot", action="store_true", help="Use GitHub Copilot (GitHub Models) as primary AI provider")
     args = parser.parse_args()
 
     setup_logging(args.debug)
     logger = logging.getLogger("jarvis")
     logger.info("Starting Jarvis Voice Assistant...")
+
+    # Load settings
+    settings = load_settings()
+
+    # Inject --copilot flag into ai settings so AIManager picks it up
+    if args.copilot:
+        settings.setdefault("ai", {})["use_copilot"] = True
+        logger.info("GitHub Copilot provider mode enabled")
 
     # Suppress SSL warnings for proxy environments
     import warnings
@@ -93,9 +102,6 @@ def main():
         print("\n❌ PyQt6 is required. Install it with:")
         print("   pip install PyQt6\n")
         sys.exit(1)
-
-    # Load settings
-    settings = load_settings()
 
     # Create application
     app = QApplication(sys.argv)

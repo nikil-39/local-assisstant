@@ -20,3 +20,49 @@
 {"ts": "2026-05-17 10:03:41", "context": "webpage", "raw": "by plane duties", "corrected": "pipelines in bitbucket", "opened": "Opening pipelines on Bitbucket.", "success": true, "source": "ai"}
 {"ts": "2026-05-17 10:57:23", "context": "webpage", "raw": "pipeline tools in bitbucket", "corrected": "pipeline-utils in bitbucket", "source": "cache"}
 {"ts": "2026-05-17 10:57:23", "context": "webpage", "raw": "pipeline tools in bitbucket", "corrected": "pipeline-utils in bitbucket", "opened": "Opening pipeline-utils on Bitbucket.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 11:05:56", "context": "general", "raw": "create a text file named nickel.", "corrected": "create a text file named nickle", "source": "ai"}
+{"ts": "2026-05-17 11:07:41", "context": "general", "raw": "create a text file named nickel", "corrected": "open [app]", "source": "ai"}
+{"ts": "2026-05-17 11:08:02", "context": "general", "raw": "create a text file,  nickel", "corrected": "open notepad", "source": "ai"}
+{"ts": "2026-05-17 11:10:17", "context": "general", "raw": "OpenSourceTree", "corrected": "open Source Tree", "source": "ai"}
+{"ts": "2026-05-17 11:39:34", "context": "webpage", "raw": "Veera.", "corrected": "I'm not aware of any page or repository named \"Veera\".", "source": "ai"}
+{"ts": "2026-05-17 11:39:34", "context": "webpage", "raw": "Veera.", "corrected": "I'm not aware of any page or repository named \"Veera\".", "opened": "I couldn't match 'I'm not aware of any page or repository named \"Veera\".' to a known page. Say Jira, Kanban board, CI CD board, or a repo name in Bitbucket.", "success": false, "source": "ai"}
+{"ts": "2026-05-17 11:39:58", "context": "general", "raw": "Visit their page.", "corrected": "visit webpage", "source": "cache"}
+{"ts": "2026-05-17 11:40:17", "context": "webpage", "raw": "Jai Ra.", "corrected": "Kanban board", "source": "ai"}
+{"ts": "2026-05-17 11:40:17", "context": "webpage", "raw": "Jai Ra.", "corrected": "Kanban board", "opened": "Opening Kanban Board.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 11:40:39", "context": "general", "raw": "Visit the page", "corrected": "visit webpage", "source": "cache"}
+{"ts": "2026-05-17 11:41:02", "context": "webpage", "raw": "CACD Board", "corrected": "CI/CD pipeline board", "source": "ai"}
+{"ts": "2026-05-17 11:41:02", "context": "webpage", "raw": "CACD Board", "corrected": "CI/CD pipeline board", "opened": "Opening Ci/Cd.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 11:42:15", "context": "general", "raw": "I will set to a pitch.", "corrected": "set volume to 50", "source": "ai"}
+{"ts": "2026-05-17 11:43:28", "context": "webpage", "raw": "Kanban board", "corrected": "Kanban sprint board", "source": "ai"}
+{"ts": "2026-05-17 11:43:28", "context": "webpage", "raw": "Kanban board", "corrected": "Kanban sprint board", "opened": "Opening Kanban.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 11:44:49", "context": "general", "raw": "with it with it with it", "corrected": "volume up", "source": "ai"}
+{"ts": "2026-05-17 11:45:33", "context": "webpage", "raw": "Jai Rao  Jai Rao", "corrected": "jira", "source": "ai"}
+{"ts": "2026-05-17 11:45:33", "context": "webpage", "raw": "Jai Rao  Jai Rao", "corrected": "jira", "opened": "Opening Jira.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 11:46:00", "context": "general", "raw": "Visit the page.", "corrected": "visit webpage", "source": "cache"}
+{"ts": "2026-05-17 11:46:23", "context": "webpage", "raw": "asmp-dev-in-bitpaket", "corrected": "asmp-dev in bitbucket", "source": "ai"}
+{"ts": "2026-05-17 11:46:23", "context": "webpage", "raw": "asmp-dev-in-bitpaket", "corrected": "asmp-dev in bitbucket", "opened": "Opening asmp-dev on Bitbucket.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 11:48:02", "context": "general", "raw": "morning breathing", "corrected": "morning briefing", "source": "ai"}
+{"ts": "2026-05-17 12:33:29", "context": "general", "raw": "Log screen.", "corrected": "open log viewer", "source": "ai"}
+{"ts": "2026-05-17 12:35:47", "context": "general", "raw": "locked screen.", "corrected": "open lockscreen", "source": "ai"}
+{"ts": "2026-05-17 12:36:25", "context": "general", "raw": "Log screen", "corrected": "open log viewer", "source": "ai"}
+{"ts": "2026-05-17 12:38:45", "context": "general", "raw": "screen lock.", "corrected": "close screen", "source": "ai"}
+{"ts": "2026-05-17 12:40:22", "context": "general", "raw": "Screen.  Law.", "corrected": "open screen law", "source": "ai"}
+{"ts": "2026-05-17 12:40:22", "context": "general", "raw": "Screen low.", "corrected": "set volume to 50", "source": "ai"}
+{"ts": "2026-05-17 12:41:05", "context": "general", "raw": "Screen? No.", "corrected": "take a screenshot", "source": "ai"}
+{"ts": "2026-05-17 12:41:48", "context": "general", "raw": "block, screen.", "corrected": "take a screenshot", "source": "ai"}
+{"ts": "2026-05-17 12:42:19", "context": "general", "raw": "locked screen.", "corrected": "lock Screen", "source": "cache"}
+{"ts": "2026-05-17 12:42:40", "context": "general", "raw": "Locked screen.", "corrected": "lock Screen", "source": "cache"}
+{"ts": "2026-05-17 12:43:30", "context": "general", "raw": "Reset the page", "corrected": "open webpage", "source": "ai"}
+{"ts": "2026-05-17 12:44:15", "context": "webpage", "raw": "asmp-dev-input bucket", "corrected": "asmp-dev in bitbucket", "source": "ai"}
+{"ts": "2026-05-17 12:44:15", "context": "webpage", "raw": "asmp-dev-input bucket", "corrected": "asmp-dev in bitbucket", "opened": "Opening asmp-dev on Bitbucket.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 12:46:01", "context": "general", "raw": "Are you up Jarvis?", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-17 12:46:57", "context": "webpage", "raw": "Jai Ra.", "corrected": "Jira", "source": "cache"}
+{"ts": "2026-05-17 12:46:57", "context": "webpage", "raw": "Jai Ra.", "corrected": "Jira", "opened": "Opening Jira.", "success": true, "source": "ai"}
+{"ts": "2026-05-17 12:50:12", "context": "general", "raw": "lockscreen", "corrected": "lock Screen", "source": "cache"}
+{"ts": "2026-05-18 09:17:57", "context": "general", "raw": "Morning Breathing", "corrected": "morning briefing", "source": "ai"}
+{"ts": "2026-05-18 09:21:30", "context": "general", "raw": "Thank you.", "corrected": "help", "source": "ai"}
+{"ts": "2026-05-19 12:19:42", "context": "webpage", "raw": "Jai Ram", "corrected": "Jira", "source": "cache"}
+{"ts": "2026-05-19 12:19:42", "context": "webpage", "raw": "Jai Ram", "corrected": "Jira", "opened": "Opening Jira.", "success": true, "source": "ai"}
+{"ts": "2026-05-28 12:03:39", "context": "webpage", "raw": "CACD board", "corrected": "CI/CD pipeline board", "source": "cache"}
+{"ts": "2026-05-28 12:03:39", "context": "webpage", "raw": "CACD board", "corrected": "CI/CD pipeline board", "opened": "Opening Ci/Cd.", "success": true, "source": "ai"}
+{"ts": "2026-05-28 14:45:06", "context": "general", "raw": "Clues outlook", "corrected": "open outlook", "source": "ai"}
