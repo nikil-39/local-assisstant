@@ -105,3 +105,58 @@
 {"ts": "2026-05-28 17:01:23", "context": "webpage", "raw": "planes repo in bitbucket", "corrected": "pipelines in bitbucket", "source": "ai"}
 {"ts": "2026-05-28 17:01:23", "context": "webpage", "raw": "planes repo in bitbucket", "corrected": "pipelines in bitbucket", "opened": "Opening pipelines on Bitbucket.", "success": true, "source": "ai"}
 {"ts": "2026-05-28 17:03:46", "context": "general", "raw": "Log screen", "corrected": "lock Screen", "source": "cache"}
+{"ts": "2026-05-28 17:47:24", "context": "general", "raw": "maine", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-28 17:47:44", "context": "general", "raw": "oh been outlook", "corrected": "open outlook", "source": "ai"}
+{"ts": "2026-05-28 17:48:13", "context": "general", "raw": "oh been mozilla firefox", "corrected": "open firefox", "source": "ai"}
+{"ts": "2026-05-28 17:48:59", "context": "general", "raw": "now", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-28 17:49:35", "context": "general", "raw": "those are mozilla firefox", "corrected": "open firefox", "source": "ai"}
+{"ts": "2026-05-28 17:50:10", "context": "general", "raw": "laws i would look", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-28 17:50:31", "context": "general", "raw": "clothes outlook", "corrected": "open outlook", "source": "ai"}
+{"ts": "2026-05-28 17:51:14", "context": "general", "raw": "when camera", "corrected": "open camera", "source": "ai"}
+{"ts": "2026-05-28 17:51:32", "context": "general", "raw": "blows camera", "corrected": "take a screenshot", "source": "ai"}
+{"ts": "2026-05-28 17:52:50", "context": "general", "raw": "both camera", "corrected": "open camera", "source": "ai"}
+{"ts": "2026-05-28 17:53:07", "context": "general", "raw": "blows camera", "corrected": "take a screenshot", "source": "ai"}
+{"ts": "2026-05-28 17:54:24", "context": "general", "raw": "or been one note", "corrected": "open onenote", "source": "ai"}
+{"ts": "2026-05-28 17:54:53", "context": "general", "raw": "when mozilla firefox", "corrected": "open firefox", "source": "ai"}
+{"ts": "2026-05-28 17:55:12", "context": "general", "raw": "oh so firefox", "corrected": "open firefox", "source": "ai"}
+{"ts": "2026-05-28 17:55:27", "context": "general", "raw": "visit the beach", "corrected": "visit webpage", "source": "cache"}
+{"ts": "2026-05-28 17:55:40", "context": "webpage", "raw": "maturity level dashwood", "corrected": "maturity level dashboard", "source": "ai"}
+{"ts": "2026-05-28 17:55:40", "context": "webpage", "raw": "maturity level dashwood", "corrected": "maturity level dashboard", "opened": "Opening Maturity Level Dashboard.", "success": true, "source": "ai"}
+{"ts": "2026-05-28 17:55:54", "context": "general", "raw": "the sit where bench", "corrected": "visit webpage", "source": "cache"}
+{"ts": "2026-05-28 17:56:03", "context": "webpage", "raw": "a cd dashboard", "corrected": "CI/CD pipeline board", "source": "cache"}
+{"ts": "2026-05-28 17:56:03", "context": "webpage", "raw": "a cd dashboard", "corrected": "CI/CD pipeline board", "opened": "Opening Ci/Cd.", "success": true, "source": "ai"}
+{"ts": "2026-05-29 11:55:21", "context": "general", "raw": "laws outlook", "corrected": "open outlook", "source": "ai"}
+{"ts": "2026-05-29 11:55:43", "context": "general", "raw": "ah liam up by fifty i am", "corrected": "set volume to 50", "source": "ai"}
+{"ts": "2026-05-29 11:57:25", "context": "general", "raw": "been camera", "corrected": "open camera", "source": "ai"}
+{"ts": "2026-05-29 11:57:58", "context": "general", "raw": "is it a page", "corrected": "visit webpage", "source": "ai"}
+{"ts": "2026-05-29 11:58:08", "context": "webpage", "raw": "maturity level dashboard", "corrected": "maturity level dashboard", "source": "cache"}
+{"ts": "2026-05-29 11:58:08", "context": "webpage", "raw": "maturity level dashboard", "corrected": "maturity level dashboard", "opened": "Opening Maturity Level Dashboard.", "success": true, "source": "passthrough"}
+{"ts": "2026-05-29 11:58:29", "context": "general", "raw": "is it repeats", "corrected": "what is the date", "source": "ai"}
+{"ts": "2026-05-29 11:58:47", "context": "general", "raw": "they said web page", "corrected": "visit webpage", "source": "ai"}
+{"ts": "2026-05-29 11:59:00", "context": "webpage", "raw": "the a cd", "corrected": "ci cd board", "source": "ai"}
+{"ts": "2026-05-29 11:59:00", "context": "webpage", "raw": "the a cd", "corrected": "ci cd board", "opened": "Opening Ci Cd Board.", "success": true, "source": "ai"}
+{"ts": "2026-05-29 12:01:33", "context": "general", "raw": "you but be hit see it in war yes", "corrected": "volume up", "source": "ai"}
+{"ts": "2026-05-29 12:03:29", "context": "general", "raw": "panels", "corrected": "help", "source": "ai"}
+{"ts": "2026-05-29 12:04:12", "context": "general", "raw": "dan pose", "corrected": "help", "source": "ai"}
+{"ts": "2026-05-30 09:14:48", "context": "general", "raw": "loose outlook", "corrected": "close outlook", "source": "ai"}
+{"ts": "2026-05-30 10:32:58", "context": "general", "raw": "Morning breathing", "corrected": "morning briefing", "source": "cache"}
+{"ts": "2026-05-30 10:34:25", "context": "general", "raw": "Assemble agent", "corrected": "visit webpage", "source": "ai"}
+{"ts": "2026-05-30 10:34:42", "context": "webpage", "raw": "Jira", "corrected": "Jira dashboard", "source": "ai"}
+{"ts": "2026-05-30 10:34:42", "context": "webpage", "raw": "Jira", "corrected": "Jira dashboard", "opened": "Opening Jira.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 10:45:04", "context": "general", "raw": "YouTube, Pudhiya Thalaimurai, Tamil News.", "corrected": "visit webpage", "source": "ai"}
+{"ts": "2026-05-30 10:45:13", "context": "webpage", "raw": "efficiency dashboard", "corrected": "cx efficiency dashboard", "source": "cache"}
+{"ts": "2026-05-30 10:45:14", "context": "webpage", "raw": "efficiency dashboard", "corrected": "cx efficiency dashboard", "opened": "Opening Cx Efficiency Dashboard.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 11:24:22", "context": "webpage", "raw": "Kanban board", "corrected": "Kanban sprint board", "source": "cache"}
+{"ts": "2026-05-30 11:24:22", "context": "webpage", "raw": "Kanban board", "corrected": "Kanban sprint board", "opened": "Opening Kanban.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 12:01:27", "context": "general", "raw": "Chrome.", "corrected": "open Chrome", "source": "ai"}
+{"ts": "2026-05-30 12:01:45", "context": "general", "raw": "Clothes, groom.", "corrected": "close [app]", "source": "ai"}
+{"ts": "2026-05-30 12:02:45", "context": "general", "raw": "This is a big", "corrected": "help", "source": "ai"}
+{"ts": "2026-05-30 12:03:27", "context": "general", "raw": "Visit the page.", "corrected": "visit webpage", "source": "cache"}
+{"ts": "2026-05-30 12:03:39", "context": "webpage", "raw": "Pipelines repo in Bitbucket", "corrected": "pipelines in bitbucket", "source": "cache"}
+{"ts": "2026-05-30 12:03:39", "context": "webpage", "raw": "Pipelines repo in Bitbucket", "corrected": "pipelines in bitbucket", "opened": "Opening pipelines on Bitbucket.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 12:04:04", "context": "webpage", "raw": "maturity level dashboard", "corrected": "maturity level dashboard", "source": "cache"}
+{"ts": "2026-05-30 12:04:04", "context": "webpage", "raw": "maturity level dashboard", "corrected": "maturity level dashboard", "opened": "Opening Maturity Level Dashboard.", "success": true, "source": "passthrough"}
+{"ts": "2026-05-30 12:07:24", "context": "general", "raw": "Camera", "corrected": "open camera", "source": "ai"}
+{"ts": "2026-05-30 12:08:37", "context": "general", "raw": "Teams.", "corrected": "open Teams", "source": "ai"}
+{"ts": "2026-05-30 12:37:39", "context": "general", "raw": "That's Teams.", "corrected": "open Teams", "source": "ai"}
+{"ts": "2026-05-30 12:37:59", "context": "general", "raw": "Teams.", "corrected": "open Teams", "source": "ai"}
