@@ -32,6 +32,11 @@ class SystemController:
 
     # ── Application Management ──────────────────────────────────────────
 
+    # Known fallback paths for apps whose URI scheme may not be registered
+    _FALLBACK_PATHS = {
+        "ms-teams:": r"C:\Users\{user}\AppData\Local\Microsoft\WindowsApps\ms-teams.exe",
+    }
+
     def open_app(self, app_name: str) -> str:
         """Launch an application by name. Tries aliases, then PATH, then Start Menu shortcuts."""
         key = app_name.lower().strip()
@@ -65,13 +70,20 @@ class SystemController:
 
         try:
             if target.endswith(":"):
-                # URI scheme — try shell start first, fall back to Start Menu
+                # URI scheme — try PowerShell Start-Process first
                 r = subprocess.run(
                     ["powershell", "-Command", f'Start-Process "{target}"'],
                     capture_output=True, text=True, timeout=10,
                 )
                 if r.returncode != 0:
-                    # URI not registered; search Start Menu for the app name
+                    # Try known fallback exe path (e.g. ms-teams.exe in WindowsApps)
+                    fallback = self._FALLBACK_PATHS.get(target, "")
+                    if fallback:
+                        fallback = fallback.replace("{user}", os.environ.get("USERNAME", ""))
+                        if os.path.isfile(fallback):
+                            subprocess.Popen([fallback], shell=False)
+                            return f"Opening {app_name}..."
+                    # Last resort: Start Menu search
                     return self._open_via_start_menu(app_name, target)
             elif os.path.isfile(target):
                 # Full path to executable

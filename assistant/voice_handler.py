@@ -467,6 +467,12 @@ class WhisperSTTWorker(QThread):
                 language="en",
                 beam_size=5,
                 vad_filter=True,  # Filter out non-speech
+                initial_prompt=(
+                    "Open Teams, close Teams, open Chrome, close Chrome, "
+                    "open Outlook, close Outlook, open Edge, close Edge, "
+                    "morning briefing, agents assemble, thanos, "
+                    "search, visit webpage, lock screen, screenshot, volume up, volume down."
+                ),
             )
 
             full_text = " ".join(seg.text for seg in segments).strip()

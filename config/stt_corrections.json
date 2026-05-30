@@ -52,7 +52,22 @@
     "take his green shot": "take a screenshot",
     "green shot": "screenshot",
     "open no pad": "open notepad",
-    "close no pad": "close notepad"
+    "close no pad": "close notepad",
+    "open themes": "open teams",
+    "close themes": "close teams",
+    "themes": "teams",
+    "theme": "teams",
+    "tims": "teams",
+    "thems": "teams",
+    "tiems": "teams",
+    "open tim": "open teams",
+    "close tim": "close teams",
+    "open tims": "open teams",
+    "close tims": "close teams",
+    "open chrome": "open chrome",
+    "close chrome": "close chrome",
+    "open google chrome": "open chrome",
+    "close google chrome": "close chrome"
   },
   "general": {
     "_readme": "General/routing corrections. Maps garbled text to correct command triggers so the right agent gets activated.",
