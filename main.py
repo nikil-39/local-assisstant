@@ -54,6 +54,9 @@ def setup_logging(debug: bool = False):
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
+    # Always show what Vosk hears so wake word issues are visible
+    logging.getLogger("jarvis.voice").setLevel(logging.DEBUG)
+
 
 def load_settings() -> dict:
     settings_path = PROJECT_ROOT / "config" / "settings.json"

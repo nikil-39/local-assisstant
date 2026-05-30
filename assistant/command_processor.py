@@ -41,6 +41,8 @@ class CommandProcessor(QObject):
         (r"\bnewspaper\b", "briefing"),
         # Thanos agent (close all apps)
         (r"\bthanos\b", "thanos"),
+        # Agents Assemble (showcase all agents)
+        (r"\bagents?\s+assemble\b", "agents_assemble"),
         # Web page agent
         (r"\bvisit\s+(?:a\s+|the\s+)?web[\s\-]*page\b", "open_webpage"),
         # Voice search agent
@@ -65,17 +67,17 @@ class CommandProcessor(QObject):
         (r"\b(what|which|list)\s+(files|folders)\s+(are\s+)?(in|inside)\s+(.+)", "list_files"),
         (r"\bsearch\s+(for\s+)?(files?|folders?)\s+(named|called|containing)\s+(.+)", "search_files"),
         (r"\bopen\s+(the\s+)?file\s+(.+)", "open_file"),
-        # Web search
+        # Open / Close application — MUST come before web-search so
+        # "close google chrome" / "open teams" don't hit the google pattern.
+        (r"\b(open|launch|start|run)\s+(.+)", "open_app"),
+        (r"\b(close|kill|stop|end)\s+(.+)", "close_app"),
+        # Web search (only after open/close are ruled out)
         (r"\bsearch\s+(for\s+)?(.+?)\s+on\s+(google|youtube|github|bing|stackoverflow|wikipedia|amazon|reddit)\b", "web_search_engine"),
-        (r"\b(google|search(\s+for)?|look\s+up)\s+(.+)", "web_search"),
+        (r"\b(google|search(?:\s+for)?|look\s+up)\s+(.+)", "web_search"),
         (r"\b(search|find)\s+on\s+youtube\s+(.+)", "youtube_search"),
         # Open website
         (r"\b(open|go\s+to|navigate\s+to|visit)\s+(https?://\S+|www\.\S+|\S+\.(com|org|net|io|dev|ai))\b", "open_url"),
         (r"\bopen\s+(.+?)\s+and\s+search\s+(for\s+)?(.+)", "open_and_search"),
-        # Open application
-        (r"\b(open|launch|start|run)\s+(.+)", "open_app"),
-        # Close / Kill application
-        (r"\b(close|kill|stop|end)\s+(.+)", "close_app"),
         # System info
         (r"\b(system\s+info|system\s+information|my\s+computer|pc\s+info)\b", "system_info"),
         (r"\b(battery|power)\s*(status|level|info)?\b", "battery"),
@@ -210,6 +212,9 @@ class CommandProcessor(QObject):
         elif action == "thanos":
             return CommandResult("thanos", "Thanos is coming...", data={"agent": "thanos"})
 
+        elif action == "agents_assemble":
+            return CommandResult("agents_assemble", "Agents Assemble! Let me introduce your team...", data={})
+
         elif action == "open_webpage":
             return CommandResult("open_webpage", "Opening web page...", data={})
 
@@ -266,7 +271,9 @@ class CommandProcessor(QObject):
             return CommandResult("web_search", f"Searching '{query}' on {engine}...", data={"query": query, "engine": engine})
 
         elif action == "web_search":
-            query = match.group(3).strip() if match.group(3) else text
+            # Pattern: \b(google|search(?:\s+for)?|look\s+up)\s+(.+)
+            # Group 1 = trigger word, Group 2 = query (non-capturing inner group)
+            query = match.group(2).strip() if match.lastindex >= 2 else text
             return CommandResult("web_search", f"Searching for '{query}'...", data={"query": query, "engine": "google"})
 
         elif action == "youtube_search":

@@ -1,16 +1,17 @@
 {
     "assistant": {
         "name": "Jarvis",
+        "user_name": "Nik",
         "wake_word": "hey jarvis",
         "language": "en-US",
-        "continuous_listening": false
+        "continuous_listening": true
     },
     "voice": {
         "tts_engine": "pyttsx3",
         "tts_rate": 175,
         "tts_volume": 0.9,
-        "stt_engine": "vosk",
-        "whisper_model": "medium",
+        "stt_engine": "whisper",
+        "whisper_model": "large-v3",
         "listen_timeout": 10,
         "phrase_time_limit": 15,
         "energy_threshold": 150,

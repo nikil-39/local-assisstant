@@ -335,8 +335,18 @@ class WhisperSTTWorker(QThread):
                 model_path = model_size  # Download from HuggingFace
                 logger.info(f"Loading Whisper model: {model_size} (downloading if needed)")
             
-            # Use CPU with int8 for good speed/accuracy balance
-            cls._model = WhisperModel(model_path, device="cpu", compute_type="int8")
+            # Use CUDA GPU if available, fallback to CPU with int8
+            try:
+                import ctranslate2
+                if ctranslate2.get_cuda_device_count() > 0:
+                    cls._model = WhisperModel(model_path, device="cuda", compute_type="int8")
+                    logger.info("Whisper model loaded on CUDA GPU")
+                else:
+                    cls._model = WhisperModel(model_path, device="cpu", compute_type="int8")
+                    logger.info("Whisper model loaded on CPU (no CUDA GPU found)")
+            except Exception as e:
+                logger.warning(f"CUDA load failed ({e}), falling back to CPU")
+                cls._model = WhisperModel(model_path, device="cpu", compute_type="int8")
             cls._model_size = model_size
             logger.info("Whisper model loaded successfully")
         return cls._model
@@ -579,61 +589,152 @@ class TTSWorker(QThread):
 
 
 class ContinuousListener(QThread):
-    """Continuously listens for the wake word, then captures a full command."""
+    """Background wake word listener using Whisper large-v3 on GPU.
+
+    Records audio in 2-second windows, skips silent chunks, then
+    transcribes with the SAME cached Whisper model used for commands.
+    No Vosk required.
+
+    Flow:
+        1. Record 2 s of audio
+        2. If RMS energy below threshold → skip (silence / background)
+        3. Transcribe with Whisper (beam_size=1, max_new_tokens=15 — fast)
+        4. If result contains a wake word → emit wake_word_detected and pause
+        5. Resume automatically after command cycle completes (call resume())
+    """
+
     wake_word_detected = pyqtSignal()
     command_recognized = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
-    level_updated = pyqtSignal(float)
+    error_occurred     = pyqtSignal(str)
+    level_updated      = pyqtSignal(float)
 
-    def __init__(self, wake_word: str = "hey assistant", settings: dict | None = None):
+    WAKE_WORDS     = ["hey jarvis", "jarvis", "hi jarvis"]
+    RATE           = 16000
+    CHUNK_FRAMES   = 1600          # 100 ms per read
+    WINDOW_SECS    = 2.0           # analyse 2 s at a time
+    ENERGY_THRESH  = 250           # RMS — skip frames quieter than this
+
+    def __init__(self, wake_word: str = "hey jarvis", settings: dict | None = None):
         super().__init__()
         self.wake_word = wake_word.lower()
-        self.settings = settings or {}
-        self._running = False
+        self.settings  = settings or {}
+        self._running  = False
+        self._paused   = False   # paused while command is being processed
 
+    # ── called from main thread ──────────────────────────────────────
+    def pause(self):
+        """Pause detection while a command is being processed."""
+        self._paused = True
+
+    def resume(self):
+        """Resume detection after command cycle finishes."""
+        self._paused = False
+
+    # ── helpers ─────────────────────────────────────────────────────
+    def _is_wake_word(self, text: str) -> bool:
+        t = text.lower().strip()
+        return any(ww in t for ww in self.WAKE_WORDS)
+
+    def _rms(self, raw: bytes) -> float:
+        if not raw:
+            return 0.0
+        samples = struct.unpack(f"<{len(raw)//2}h", raw)
+        return math.sqrt(sum(s * s for s in samples) / len(samples))
+
+    # ── main loop ───────────────────────────────────────────────────
     def run(self):
+        import time
+
         try:
-            import speech_recognition as sr
-        except ImportError:
-            self.error_occurred.emit("speech_recognition not installed")
+            import pyaudio
+            import numpy as np
+        except ImportError as e:
+            self.error_occurred.emit(f"Continuous listening requires pyaudio + numpy: {e}")
+            return
+
+        # Reuse the already-loaded Whisper model — no extra GPU memory
+        model_size = self.settings.get("whisper_model", "large-v3")
+        try:
+            model = WhisperSTTWorker.get_model(model_size)
+        except Exception as e:
+            self.error_occurred.emit(f"Cannot access Whisper model for wake word: {e}")
+            return
+
+        pa = pyaudio.PyAudio()
+        try:
+            stream = pa.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=self.RATE,
+                input=True,
+                frames_per_buffer=self.CHUNK_FRAMES,
+            )
+        except Exception as e:
+            pa.terminate()
+            self.error_occurred.emit(f"Cannot open microphone for wake word: {e}")
             return
 
         self._running = True
-        recognizer = sr.Recognizer()
-        recognizer.pause_threshold = 1.0
-        recognizer.dynamic_energy_threshold = True
-        # Let adjust_for_ambient_noise auto-set the energy threshold
+        window_size   = int(self.WINDOW_SECS * self.RATE / self.CHUNK_FRAMES)
+        buf: list[bytes] = []
+        logger.info("Continuous listening started (Whisper large-v3 GPU)")
 
         try:
-            mic = sr.Microphone()
+            while self._running:
+                if self._paused:
+                    time.sleep(0.05)
+                    buf.clear()   # discard audio recorded during command cycle
+                    continue
+
+                raw = stream.read(self.CHUNK_FRAMES, exception_on_overflow=False)
+
+                # Audio level for UI visualisation
+                rms = self._rms(raw)
+                self.level_updated.emit(min(rms / 8000.0, 1.0))
+
+                buf.append(raw)
+                if len(buf) < window_size:
+                    continue
+
+                window = b"".join(buf)
+                buf.clear()
+
+                # Skip silent windows
+                if self._rms(window) < self.ENERGY_THRESH:
+                    continue
+
+                # Transcribe with Whisper (fast settings — just need wake phrase)
+                audio_np = (
+                    np.frombuffer(window, dtype=np.int16).astype(np.float32) / 32768.0
+                )
+                try:
+                    segments, _ = model.transcribe(
+                        audio_np,
+                        language="en",
+                        beam_size=1,
+                        best_of=1,
+                        max_new_tokens=15,
+                        initial_prompt="hey jarvis",
+                    )
+                    text = " ".join(s.text for s in segments).strip()
+                    if text:
+                        logger.debug(f"Wake listener heard: '{text}'")
+                    if text and self._is_wake_word(text):
+                        logger.info(f"Wake word detected: '{text}'")
+                        self._paused = True    # stop processing until command done
+                        self.wake_word_detected.emit()
+                except Exception as te:
+                    logger.debug(f"Wake transcription skipped: {te}")
+
         except Exception as e:
-            self.error_occurred.emit(f"No microphone: {e}")
-            return
-
-        with mic as source:
-            recognizer.adjust_for_ambient_noise(source, duration=1)
-
-        def callback(recognizer, audio):
-            if not self._running:
-                return
-            try:
-                text = recognizer.recognize_google(audio).lower()
-                if self.wake_word in text:
-                    self.wake_word_detected.emit()
-                    # Extract command after wake word
-                    idx = text.find(self.wake_word) + len(self.wake_word)
-                    command = text[idx:].strip()
-                    if command:
-                        self.command_recognized.emit(command)
-            except Exception:
-                pass
-
-        stop_listening = recognizer.listen_in_background(mic, callback, phrase_time_limit=10)
-
-        while self._running:
-            self.msleep(100)
-
-        stop_listening(wait_for_stop=False)
+            if self._running:
+                logger.error(f"Continuous listener error: {e}")
+                self.error_occurred.emit(str(e))
+        finally:
+            stream.stop_stream()
+            stream.close()
+            pa.terminate()
+            logger.info("Continuous listening stopped")
 
     def stop(self):
         self._running = False

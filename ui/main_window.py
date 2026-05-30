@@ -214,7 +214,7 @@ class SettingsDialog(QDialog):
 
         # STT Engine
         self.stt_combo = QComboBox()
-        self.stt_combo.addItems(["vosk", "sphinx", "google", "windows_sapi", "powershell_sapi"])
+        self.stt_combo.addItems(["whisper", "vosk", "sphinx", "google", "windows_sapi", "powershell_sapi"])
         stt_current = settings.get("voice", {}).get("stt_engine", "sphinx")
         self.stt_combo.setCurrentText(stt_current)
         form.addRow("Speech Engine:", self.stt_combo)
@@ -304,8 +304,13 @@ class JarvisMainWindow(QMainWindow):
         self._status_timer.setSingleShot(True)
         self._status_timer.timeout.connect(lambda: self._set_status("Ready"))
 
-        # Initial status
-        QTimer.singleShot(500, lambda: self._set_status("Ready • Press mic or Ctrl+Space"))
+        # Start continuous listening if enabled
+        if self.assistant_settings.get("continuous_listening", False):
+            QTimer.singleShot(1000, self._start_continuous_listening)
+            QTimer.singleShot(500, lambda: self._set_status("Listening for 'Hey Jarvis'..."))
+        else:
+            # Initial status
+            QTimer.singleShot(500, lambda: self._set_status("Ready • Press mic or Ctrl+Space"))
 
     # ── Window Setup ──────────────────────────────────────────────────
 
@@ -682,6 +687,34 @@ class JarvisMainWindow(QMainWindow):
             self._set_state(AssistantState.IDLE)
             self._set_status("Cancelled")
 
+    def _start_continuous_listening(self):
+        """Start wake word detection in background."""
+        wake_word = self.assistant_settings.get("wake_word", "hey jarvis")
+        self.voice_handler.start_continuous_listening(wake_word)
+        try:
+            self.voice_handler.wake_word_detected.connect(self._on_wake_word, Qt.ConnectionType.UniqueConnection)
+        except TypeError:
+            pass  # already connected — UniqueConnection raises if duplicate
+        self._set_status("Listening for 'Hey Jarvis'...")
+        logger.info("Continuous listening enabled (wake word mode)")
+
+    def _stop_continuous_listening(self):
+        """Stop wake word detection."""
+        self.voice_handler.stop_continuous_listening()
+        self._set_status("Ready • Press mic or Ctrl+Space")
+        logger.info("Continuous listening disabled")
+
+    def _on_wake_word(self):
+        """Called when wake word is detected — acknowledge, then start listening."""
+        logger.info("Wake word detected! Starting command listening...")
+        user_name = self.assistant_settings.get("user_name", "").strip()
+        ack = f"Yes {user_name}?" if user_name else "Yes?"
+        self._set_status(ack)
+        # Speak the acknowledgment so the user knows Jarvis heard them.
+        # start_listening is triggered only after TTS finishes (via _listen_after_speak).
+        self._listen_after_speak = True
+        self.voice_handler.speak(ack)
+
     def _on_listening_started(self):
         self._set_state(AssistantState.LISTENING)
         self._set_status("Listening... Speak now")
@@ -750,7 +783,13 @@ class JarvisMainWindow(QMainWindow):
             QTimer.singleShot(300, self._start_listening_for_context)
             return
         self._set_state(AssistantState.IDLE)
-        self._set_status("Ready")
+        # Resume continuous listener (Whisper-based) after command cycle
+        if self.assistant_settings.get("continuous_listening", False):
+            if self.voice_handler._continuous_listener:
+                self.voice_handler._continuous_listener.resume()
+            self._set_status("Listening for 'Hey Jarvis'...")
+        else:
+            self._set_status("Ready")
 
     def _start_listening_for_context(self):
         """Start listening immediately (used after prompt TTS finishes)."""
@@ -973,6 +1012,17 @@ class JarvisMainWindow(QMainWindow):
         self.voice_settings = new_settings.get("voice", self.voice_settings)
         self.ai_settings = new_settings.get("ai", self.ai_settings)
         self.ui_settings = new_settings.get("ui", self.ui_settings)
+        self.assistant_settings = new_settings.get("assistant", self.assistant_settings)
+
+        # Update voice handler settings
+        self.voice_handler.settings = self.voice_settings
+
+        # Toggle continuous listening based on setting
+        if self.assistant_settings.get("continuous_listening", False):
+            self._start_continuous_listening()
+        else:
+            self._stop_continuous_listening()
+
         self._set_status("Settings updated")
 
     # ── State Management ──────────────────────────────────────────────

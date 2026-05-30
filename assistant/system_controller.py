@@ -65,8 +65,14 @@ class SystemController:
 
         try:
             if target.endswith(":"):
-                # URI scheme (ms-teams:, ms-settings:, WhatsApp:)
-                subprocess.Popen(["cmd", "/c", "start", "", target], shell=False)
+                # URI scheme — try shell start first, fall back to Start Menu
+                r = subprocess.run(
+                    ["powershell", "-Command", f'Start-Process "{target}"'],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if r.returncode != 0:
+                    # URI not registered; search Start Menu for the app name
+                    return self._open_via_start_menu(app_name, target)
             elif os.path.isfile(target):
                 # Full path to executable
                 subprocess.Popen([target], shell=False)
@@ -151,7 +157,8 @@ class SystemController:
 
     def close_app(self, app_name: str) -> str:
         """Close an application by process name."""
-        key = app_name.lower().strip()
+        # Strip trailing punctuation that Whisper sometimes appends
+        key = app_name.lower().strip().rstrip(".,!? ")
 
         # Remove command words that may be in the parsed text
         for word in ("close", "kill", "stop", "end", "the", "application", "app", "please"):
@@ -185,20 +192,33 @@ class SystemController:
         # Strip URI scheme suffix
         proc_name = proc_name.rstrip(":")
 
+        # Build list of process names to try: exact + wildcard
+        # For Teams, try both new (ms-teams) and old (Teams) exe names
+        proc_names = [proc_name]
+        if proc_name in ("ms-teams", "teams"):
+            proc_names = ["ms-teams", "Teams"]
+
         try:
-            result = subprocess.run(
-                ["taskkill", "/IM", f"{proc_name}.exe", "/F"],
-                capture_output=True, text=True, timeout=10,
-            )
-            if result.returncode == 0:
+            killed = False
+            for pname in proc_names:
+                r = subprocess.run(
+                    ["taskkill", "/IM", f"{pname}.exe", "/F"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if r.returncode == 0:
+                    killed = True
+            if killed:
                 return f"Closed {app_name}."
-            # If exact name failed, try a case-insensitive wildcard via PowerShell
+            # Wildcard fallback via PowerShell
+            pattern = "|".join(f'$_.Name -like "*{p}*"' for p in proc_names)
             ps_result = subprocess.run(
                 ["powershell", "-Command",
-                 f'Get-Process | Where-Object {{$_.Name -like "*{proc_name}*"}} | Stop-Process -Force'],
+                 f'Get-Process | Where-Object {{{pattern}}} | Stop-Process -Force -ErrorAction SilentlyContinue'],
                 capture_output=True, text=True, timeout=10,
             )
-            return f"Closed {app_name}."
+            if ps_result.returncode == 0:
+                return f"Closed {app_name}."
+            return f"Could not find a running process for '{app_name}'."
         except Exception as e:
             return f"Could not close {app_name}: {e}"
 

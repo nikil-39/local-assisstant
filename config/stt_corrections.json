@@ -1,6 +1,7 @@
 {
+  "_readme": "STT corrections organized by agent/context. Key = exactly what STT heard (lowercase). Value = correct phrase. Jarvis picks up changes on next startup.",
   "webpage": {
-    "_readme": "Jarvis 'visit webpage' agent corrections. Key = exactly what Vosk heard (lowercase). Value = correct phrase. Delete or fix any wrong entry. Jarvis picks up changes on next startup.",
+    "_readme": "Webpage agent corrections. Triggered after 'visit webpage'. Corrects garbled page/repo names.",
     "jai ra.": "Jira",
     "cacd board": "CI/CD pipeline board",
     "kanban board": "Kanban sprint board",
@@ -12,16 +13,49 @@
     "cx efficiency.": "cx efficiency dashboard",
     "cx efficiency dashboard.": "cx efficiency dashboard",
     "cacd dashboard": "CI/CD pipeline board",
-    "planes repo in bitbucket": "pipelines in bitbucket"
+    "planes repo in bitbucket": "pipelines in bitbucket",
+    "maturity level dashwood": "maturity level dashboard",
+    "a cd dashboard": "CI/CD pipeline board",
+    "the a cd": "ci cd board",
+    "jira": "Jira dashboard",
+    "efficiency dashboard": "cx efficiency dashboard",
+    "pipelines repo in bitbucket": "pipelines in bitbucket"
   },
-  "apps": {
-    "_readme": "Open/close app corrections. Key = garbled app name Vosk heard. Value = correct app name from commands.json aliases."
+  "voice_search": {
+    "_readme": "Voice Search agent corrections. Triggered after 'search'. Corrects garbled platform names or search queries.",
+    "you to": "youtube",
+    "you too": "youtube",
+    "u tube": "youtube",
+    "goo gal": "google",
+    "goggle": "google",
+    "go go": "google"
   },
   "briefing": {
-    "_readme": "Morning briefing agent corrections. Currently unused — add entries if briefing trigger gets garbled."
+    "_readme": "Morning Briefing agent corrections. Corrects garbled trigger phrases for briefing.",
+    "morning breeding": "morning briefing",
+    "morning briefin": "morning briefing",
+    "news paper": "newspaper"
+  },
+  "thanos": {
+    "_readme": "Thanos agent corrections. Corrects garbled 'thanos' trigger.",
+    "than us": "thanos",
+    "fan nose": "thanos",
+    "than os": "thanos"
+  },
+  "system": {
+    "_readme": "System commands: open/close apps, lock screen, volume, screenshot, etc.",
+    "Log screen": "lock screen",
+    "locked screen": "lock screen",
+    "screen lock": "lock screen",
+    "volume of": "volume up",
+    "volume done": "volume down",
+    "take his green shot": "take a screenshot",
+    "green shot": "screenshot",
+    "open no pad": "open notepad",
+    "close no pad": "close notepad"
   },
   "general": {
-    "_readme": "General command corrections. Every AI correction is logged to stt_corrections_log.jsonl. If a correction was WRONG, add the entry here manually: key = what Vosk heard, value = what you actually meant. Jarvis will use this instantly next time without calling AI.",
+    "_readme": "General/routing corrections. Maps garbled text to correct command triggers so the right agent gets activated.",
     "the sit the beach": "visit webpage",
     "we sit with beach": "visit webpage",
     "visit the beach": "visit webpage",
@@ -31,8 +65,10 @@
     "visit the page": "visit webpage",
     "they sipped the paid": "visit webpage",
     "i sit a": "visit webpage",
-    "Log screen": "lock Screen",
-    "locked screen": "lock Screen",
-    "screen lock": "lock Screen"
+    "search for": "search",
+    "voice search": "search",
+    "agent assemble": "agents assemble",
+    "agents assembled": "agents assemble",
+    "agent assembled": "agents assemble"
   }
 }

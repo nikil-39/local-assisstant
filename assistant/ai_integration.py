@@ -614,6 +614,7 @@ class AIManager(QObject):
         r"\b("
         r"briefing|newspaper|morning briefing|give briefing"
         r"|thanos"
+        r"|agents?\s+assemble"
         r"|visit\s+web\s*page"
         r"|maturity\s+level|cx\s+efficiency|machine\s+learning|data\s+collection"
         r"|open\s+\w+|launch\s+\w+|start\s+\w+|close\s+\w+"
@@ -649,7 +650,7 @@ class AIManager(QObject):
     # Edit any section manually to fix wrong entries or add new ones.
     # Jarvis reloads the file on the NEXT startup automatically.
 
-    _EMPTY_SECTIONS: dict = {"webpage": {}, "apps": {}, "briefing": {}, "general": {}}
+    _EMPTY_SECTIONS: dict = {"webpage": {}, "voice_search": {}, "briefing": {}, "thanos": {}, "system": {}, "general": {}}
 
     def _load_corrections_cache(self) -> dict[str, str]:
         """Load the 'webpage' section from the sectioned stt_corrections.json."""
@@ -666,13 +667,16 @@ class AIManager(QObject):
         return {}
 
     def _load_general_cache(self) -> dict[str, str]:
-        """Load the 'general' section from stt_corrections.json."""
+        """Load the 'general' + 'system' + 'thanos' + 'briefing' sections from stt_corrections.json."""
         try:
             if self._corrections_cache_path.exists():
                 data = json.loads(self._corrections_cache_path.read_text(encoding="utf-8"))
-                cache = {k: v for k, v in data.get("general", {}).items()
-                         if not k.startswith("_")}
-                logger.info(f"Corrections cache loaded: {len(cache)} general entries")
+                cache = {}
+                for section in ("general", "system", "thanos", "briefing"):
+                    for k, v in data.get(section, {}).items():
+                        if not k.startswith("_"):
+                            cache[k] = v
+                logger.info(f"Corrections cache loaded: {len(cache)} general/system/thanos/briefing entries")
                 return cache
         except Exception as e:
             logger.warning(f"Could not load general corrections cache: {e}")
