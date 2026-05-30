@@ -160,3 +160,34 @@
 {"ts": "2026-05-30 12:08:37", "context": "general", "raw": "Teams.", "corrected": "open Teams", "source": "ai"}
 {"ts": "2026-05-30 12:37:39", "context": "general", "raw": "That's Teams.", "corrected": "open Teams", "source": "ai"}
 {"ts": "2026-05-30 12:37:59", "context": "general", "raw": "Teams.", "corrected": "open Teams", "source": "ai"}
+{"ts": "2026-05-30 12:41:58", "context": "general", "raw": "screen.", "corrected": "take a screenshot", "source": "ai"}
+{"ts": "2026-05-30 12:51:39", "context": "general", "raw": "Camera.", "corrected": "open camera", "source": "ai"}
+{"ts": "2026-05-30 12:52:06", "context": "general", "raw": "Camera.", "corrected": "open camera", "source": "ai"}
+{"ts": "2026-05-30 12:54:27", "context": "webpage", "raw": "Kanban board.", "corrected": "Kanban sprint board", "source": "cache"}
+{"ts": "2026-05-30 12:54:28", "context": "webpage", "raw": "Kanban board.", "corrected": "Kanban sprint board", "opened": "Opening Kanban.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 12:55:24", "context": "general", "raw": "That's it.", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-30 13:04:32", "context": "general", "raw": "Teams.", "corrected": "open Teams", "source": "ai"}
+{"ts": "2026-05-30 13:06:40", "context": "webpage", "raw": "Then you need to get going.", "corrected": "Then you need to get going.", "opened": "I couldn't match 'Then you need to get going.' to a known page. Say Jira, Kanban board, CI CD board, or a repo name in Bitbucket.", "success": false, "source": "passthrough"}
+{"ts": "2026-05-30 13:07:04", "context": "general", "raw": "The page.", "corrected": "visit webpage", "source": "cache"}
+{"ts": "2026-05-30 13:07:14", "context": "webpage", "raw": "Maturity level dashboard.", "corrected": "maturity level dashboard", "source": "cache"}
+{"ts": "2026-05-30 13:07:14", "context": "webpage", "raw": "Maturity level dashboard.", "corrected": "maturity level dashboard", "opened": "Opening Maturity Level Dashboard.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 13:07:48", "context": "webpage", "raw": "Kanban board.", "corrected": "Kanban sprint board", "source": "cache"}
+{"ts": "2026-05-30 13:07:48", "context": "webpage", "raw": "Kanban board.", "corrected": "Kanban sprint board", "opened": "Opening Kanban.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 13:19:16", "context": "general", "raw": "Jarvis.", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-30 13:19:37", "context": "general", "raw": "Camera out.", "corrected": "close camera", "source": "ai"}
+{"ts": "2026-05-30 13:20:24", "context": "general", "raw": "Camera.", "corrected": "open camera", "source": "ai"}
+{"ts": "2026-05-30 13:22:48", "context": "general", "raw": "And Jarvis.", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-30 13:23:09", "context": "general", "raw": "Teams.", "corrected": "open Teams", "source": "ai"}
+{"ts": "2026-05-30 13:23:27", "context": "general", "raw": "Outlook.", "corrected": "open Outlook", "source": "ai"}
+{"ts": "2026-05-30 13:24:15", "context": "webpage", "raw": "maturity level dashboard", "corrected": "maturity level dashboard", "source": "cache"}
+{"ts": "2026-05-30 13:24:15", "context": "webpage", "raw": "maturity level dashboard", "corrected": "maturity level dashboard", "opened": "Opening Maturity Level Dashboard.", "success": true, "source": "passthrough"}
+{"ts": "2026-05-30 13:25:26", "context": "general", "raw": "Thank you so much for watching, and I'll see you in the next video.", "corrected": "hello", "source": "ai"}
+{"ts": "2026-05-30 13:26:09", "context": "webpage", "raw": "CX data visualization repo in Bitbucket.", "corrected": "cx data visualization in bitbucket", "source": "ai"}
+{"ts": "2026-05-30 13:26:09", "context": "webpage", "raw": "CX data visualization repo in Bitbucket.", "corrected": "cx data visualization in bitbucket", "opened": "Opening cx-data-visualization on Bitbucket.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 13:33:40", "context": "webpage", "raw": "Maturity level dashboard.", "corrected": "maturity level dashboard", "source": "cache"}
+{"ts": "2026-05-30 13:33:40", "context": "webpage", "raw": "Maturity level dashboard.", "corrected": "maturity level dashboard", "opened": "Opening Maturity Level Dashboard.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 13:34:01", "context": "general", "raw": "web page.", "corrected": "visit webpage", "source": "ai"}
+{"ts": "2026-05-30 13:34:09", "context": "webpage", "raw": "Pipelines repo in Bitbucket.", "corrected": "pipelines in bitbucket", "source": "cache"}
+{"ts": "2026-05-30 13:34:09", "context": "webpage", "raw": "Pipelines repo in Bitbucket.", "corrected": "pipelines in bitbucket", "opened": "Opening pipelines on Bitbucket.", "success": true, "source": "ai"}
+{"ts": "2026-05-30 13:40:15", "context": "general", "raw": "YouTube.", "corrected": "open YouTube", "source": "ai"}
+{"ts": "2026-05-30 14:44:30", "context": "general", "raw": "Chrome.", "corrected": "open Chrome", "source": "ai"}

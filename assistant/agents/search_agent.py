@@ -59,6 +59,11 @@ def _parse_platform_and_query(text: str) -> tuple[str | None, str]:
     Tries to match the longest synonym prefix, then falls back to fuzzy.
     Returns (None, "") if no platform found.
     """
+    import re as _re
+    # Strip punctuation (commas, periods, etc.) so STT output like
+    # "YouTube, Marvel, Thanos, Snaps." doesn't break prefix matching.
+    text = _re.sub(r"[^\w\s]", " ", text)
+    text = _re.sub(r"\s{2,}", " ", text).strip()
     words = text.split()
 
     # 1. Longest-first exact synonym prefix match

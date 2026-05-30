@@ -19,7 +19,11 @@
     "the a cd": "ci cd board",
     "jira": "Jira dashboard",
     "efficiency dashboard": "cx efficiency dashboard",
-    "pipelines repo in bitbucket": "pipelines in bitbucket"
+    "pipelines repo in bitbucket": "pipelines in bitbucket",
+    "kanban board.": "Kanban sprint board",
+    "maturity level dashboard.": "maturity level dashboard",
+    "cx data visualization repo in bitbucket.": "cx data visualization in bitbucket",
+    "pipelines repo in bitbucket.": "pipelines in bitbucket"
   },
   "voice_search": {
     "_readme": "Voice Search agent corrections. Triggered after 'search'. Corrects garbled platform names or search queries.",
