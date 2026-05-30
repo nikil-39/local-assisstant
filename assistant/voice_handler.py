@@ -666,81 +666,118 @@ class ContinuousListener(QThread):
             self.error_occurred.emit(f"Cannot access Whisper model for wake word: {e}")
             return
 
-        pa = pyaudio.PyAudio()
-        try:
-            stream = pa.open(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=self.RATE,
-                input=True,
-                frames_per_buffer=self.CHUNK_FRAMES,
-            )
-        except Exception as e:
-            pa.terminate()
-            self.error_occurred.emit(f"Cannot open microphone for wake word: {e}")
-            return
-
         self._running = True
         window_size   = int(self.WINDOW_SECS * self.RATE / self.CHUNK_FRAMES)
-        buf: list[bytes] = []
+        _RETRY_DELAY  = 3.0   # seconds to wait before retrying after a device error
+        _MAX_RETRIES  = 20    # give up after this many consecutive open-failures
+
         logger.info("Continuous listening started (Whisper large-v3 GPU)")
+        open_failures = 0
 
-        try:
-            while self._running:
-                if self._paused:
-                    time.sleep(0.05)
-                    buf.clear()   # discard audio recorded during command cycle
-                    continue
-
-                raw = stream.read(self.CHUNK_FRAMES, exception_on_overflow=False)
-
-                # Audio level for UI visualisation
-                rms = self._rms(raw)
-                self.level_updated.emit(min(rms / 8000.0, 1.0))
-
-                buf.append(raw)
-                if len(buf) < window_size:
-                    continue
-
-                window = b"".join(buf)
-                buf.clear()
-
-                # Skip silent windows
-                if self._rms(window) < self.ENERGY_THRESH:
-                    continue
-
-                # Transcribe with Whisper (fast settings — just need wake phrase)
-                audio_np = (
-                    np.frombuffer(window, dtype=np.int16).astype(np.float32) / 32768.0
+        while self._running:
+            # ── open microphone ─────────────────────────────────────
+            pa = pyaudio.PyAudio()
+            try:
+                stream = pa.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=self.RATE,
+                    input=True,
+                    frames_per_buffer=self.CHUNK_FRAMES,
                 )
-                try:
-                    segments, _ = model.transcribe(
-                        audio_np,
-                        language="en",
-                        beam_size=1,
-                        best_of=1,
-                        max_new_tokens=15,
-                        initial_prompt="hey jarvis",
-                    )
-                    text = " ".join(s.text for s in segments).strip()
-                    if text:
-                        logger.debug(f"Wake listener heard: '{text}'")
-                    if text and self._is_wake_word(text):
-                        logger.info(f"Wake word detected: '{text}'")
-                        self._paused = True    # stop processing until command done
-                        self.wake_word_detected.emit()
-                except Exception as te:
-                    logger.debug(f"Wake transcription skipped: {te}")
+                open_failures = 0   # reset counter on successful open
+            except Exception as e:
+                pa.terminate()
+                open_failures += 1
+                if not self._running:
+                    break
+                if open_failures == 1:
+                    # Only emit error on first failure to avoid spam
+                    logger.warning(f"Microphone unavailable, will retry every {_RETRY_DELAY}s: {e}")
+                    self.error_occurred.emit("Microphone disconnected — waiting for reconnection...")
+                if open_failures >= _MAX_RETRIES:
+                    logger.error("Microphone not available after max retries; stopping wake listener.")
+                    self.error_occurred.emit("Wake word listener stopped: microphone unavailable.")
+                    break
+                time.sleep(_RETRY_DELAY)
+                continue
 
-        except Exception as e:
+            # ── read/transcribe loop ────────────────────────────────
+            buf: list[bytes] = []
+            try:
+                while self._running:
+                    if self._paused:
+                        time.sleep(0.05)
+                        buf.clear()   # discard audio recorded during command cycle
+                        continue
+
+                    raw = stream.read(self.CHUNK_FRAMES, exception_on_overflow=False)
+
+                    # Audio level for UI visualisation
+                    rms = self._rms(raw)
+                    self.level_updated.emit(min(rms / 8000.0, 1.0))
+
+                    buf.append(raw)
+                    if len(buf) < window_size:
+                        continue
+
+                    window = b"".join(buf)
+                    buf.clear()
+
+                    # Skip silent windows
+                    if self._rms(window) < self.ENERGY_THRESH:
+                        continue
+
+                    # Transcribe with Whisper (fast settings — just need wake phrase)
+                    audio_np = (
+                        np.frombuffer(window, dtype=np.int16).astype(np.float32) / 32768.0
+                    )
+                    try:
+                        segments, _ = model.transcribe(
+                            audio_np,
+                            language="en",
+                            beam_size=1,
+                            best_of=1,
+                            max_new_tokens=15,
+                            initial_prompt="hey jarvis",
+                        )
+                        text = " ".join(s.text for s in segments).strip()
+                        if text:
+                            logger.debug(f"Wake listener heard: '{text}'")
+                        if text and self._is_wake_word(text):
+                            logger.info(f"Wake word detected: '{text}'")
+                            self._paused = True    # stop processing until command done
+                            self.wake_word_detected.emit()
+                    except Exception as te:
+                        logger.debug(f"Wake transcription skipped: {te}")
+
+            except OSError as e:
+                # Device disconnected mid-stream (e.g. USB mic unplugged)
+                if self._running:
+                    logger.warning(f"Microphone disconnected during capture: {e}. Will retry in {_RETRY_DELAY}s.")
+            except Exception as e:
+                if self._running:
+                    logger.error(f"Continuous listener error: {e}", exc_info=True)
+            finally:
+                # Safely clean up the stream — it may already be dead
+                try:
+                    stream.stop_stream()
+                except Exception:
+                    pass
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+                try:
+                    pa.terminate()
+                except Exception:
+                    pass
+
             if self._running:
-                logger.error(f"Continuous listener error: {e}")
-                self.error_occurred.emit(str(e))
-        finally:
-            stream.stop_stream()
-            stream.close()
-            pa.terminate()
-            logger.info("Continuous listening stopped")
+                # Brief pause before trying to reopen (lets OS release the device)
+                time.sleep(_RETRY_DELAY)
+
+        logger.info("Continuous listening stopped")
 
     def stop(self):
         self._running = False
