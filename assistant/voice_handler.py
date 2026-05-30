@@ -614,7 +614,7 @@ class ContinuousListener(QThread):
     error_occurred     = pyqtSignal(str)
     level_updated      = pyqtSignal(float)
 
-    WAKE_WORDS     = ["hey jarvis", "jarvis", "hi jarvis"]
+    WAKE_WORDS     = ["hey jarvis", "jarvis", "hi jarvis", "hey travis", "travis", "hi travis", "hey davis", "davis"]
     RATE           = 16000
     CHUNK_FRAMES   = 1600          # 100 ms per read
     WINDOW_SECS    = 2.0           # analyse 2 s at a time
